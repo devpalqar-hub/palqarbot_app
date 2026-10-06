@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:palqarbot_app/Core/Screens/Inbox/inboxscreen.dart';
-import 'package:palqarbot_app/Core/Screens/Settings/SettingsScreen.dart';
-import 'package:palqarbot_app/Core/Screens/bot/BotScreen.dart';
-import 'package:palqarbot_app/Core/Screens/leads/LeadsScreen.dart';
+import 'package:palqarbot_app/Screens/Inbox/inboxscreen.dart';
+import 'package:palqarbot_app/Screens/Settings/SettingsScreen.dart';
+import 'package:palqarbot_app/Screens/bot/BotScreen.dart';
+import 'package:palqarbot_app/Screens/leads/LeadsScreen.dart';
 
 import 'package:palqarbot_app/Core/Theme/app_colors.dart';
 import 'package:palqarbot_app/Core/Theme/app_textstyles.dart';
