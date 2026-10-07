@@ -32,4 +32,19 @@ class ApiConstants {
 
   static String instagram(String profileId) =>
       '$baseUrl/profiles/$profileId/instagram';
+
+  static const String myProfiles =
+      '$baseUrl/auth/me/profiles';
+
+  static String inboxConversations(String profileId) =>
+      '$baseUrl/profiles/$profileId/inbox/conversations';
+
+  static String inboxMessages(String profileId, String conversationId) =>
+      '${inboxConversations(profileId)}/$conversationId/messages';
+
+  static String inboxSend(String profileId, String conversationId) =>
+      '${inboxConversations(profileId)}/$conversationId/send';
+
+  static String inboxAi(String profileId, String conversationId) =>
+      '${inboxConversations(profileId)}/$conversationId/ai';
 }

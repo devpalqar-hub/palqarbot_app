@@ -14,132 +14,213 @@ class ChatTag {
 }
 
 class ChatMessage {
+  final String id;
   final String text;
-  final String time;
+  final DateTime? createdAt;
   final Sender sender;
+  final bool failed;
 
-  const ChatMessage(this.text, this.time, this.sender);
+  const ChatMessage({
+    required this.id,
+    required this.text,
+    required this.createdAt,
+    required this.sender,
+    this.failed = false,
+  });
+
+  String get time => formatClock(createdAt);
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: _str(json['id']) ?? '',
+      text: _str(_pick(json, ['content', 'text', 'body', 'message'])) ?? '',
+      createdAt: _date(_pick(json, ['createdAt', 'timestamp', 'sentAt'])),
+      sender: _sender(json),
+      failed: (_str(json['status']) ?? '').toUpperCase() == 'FAILED',
+    );
+  }
+
+  static Sender _sender(Map<String, dynamic> json) {
+    final who = (_str(_pick(json, ['sender', 'senderType', 'role', 'from', 'author'])) ?? '').toLowerCase();
+    final direction = (_str(json['direction']) ?? '').toLowerCase();
+
+    if (['user', 'customer', 'contact', 'inbound', 'incoming'].any(who.contains)) {
+      return Sender.customer;
+    }
+    if (['ai', 'bot', 'assistant', 'system'].any(who.contains)) return Sender.bot;
+    if (['human', 'agent', 'admin', 'staff', 'manual'].any(who.contains)) return Sender.agent;
+
+    if (direction.contains('in')) return Sender.customer;
+    if (json['isAi'] == true || json['aiGenerated'] == true || json['isBot'] == true) {
+      return Sender.bot;
+    }
+    return Sender.agent;
+  }
 }
 
 class Conversation {
+  final String id;
   final String name;
   final String lastMessage;
-  final String time;
+  final DateTime? lastAt;
   final Channel channel;
   final int unread;
-  final bool botActive;
-  final List<ChatTag> tags;
-  final List<ChatMessage> messages;
+  final bool aiEnabled;
+  final String? leadStatus;
 
   const Conversation({
+    required this.id,
     required this.name,
     required this.lastMessage,
-    required this.time,
+    required this.lastAt,
     required this.channel,
-    this.unread = 0,
-    this.botActive = false,
-    this.tags = const [],
-    this.messages = const [],
+    required this.unread,
+    required this.aiEnabled,
+    required this.leadStatus,
   });
+
+  String get time => formatAgo(lastAt);
+
+  List<ChatTag> get tags {
+    final list = <ChatTag>[];
+    if (leadStatus != null && leadStatus!.isNotEmpty) list.add(_leadTag(leadStatus!));
+    if (!aiEnabled) {
+      list.add(const ChatTag('Manual', AppColors.warning, AppColors.warningLight));
+    }
+    return list;
+  }
+
+  Conversation copyWith({bool? aiEnabled, int? unread, String? lastMessage, DateTime? lastAt}) {
+    return Conversation(
+      id: id,
+      name: name,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastAt: lastAt ?? this.lastAt,
+      channel: channel,
+      unread: unread ?? this.unread,
+      aiEnabled: aiEnabled ?? this.aiEnabled,
+      leadStatus: leadStatus,
+    );
+  }
+
+  factory Conversation.fromJson(Map<String, dynamic> json) {
+    final contact = _map(json['contact']) ?? _map(json['customer']) ?? const <String, dynamic>{};
+    final lead = _map(json['lead']) ?? const <String, dynamic>{};
+
+    final name = _str(_pick(contact, ['name', 'displayName', 'fullName', 'username', 'waId', 'phone'])) ??
+        _str(_pick(json, ['name', 'contactName', 'customerName', 'username', 'phone'])) ??
+        'Unknown';
+
+    final shownName = RegExp(r'^\d{8,}$').hasMatch(name) ? '+$name' : name;
+
+    String last = '';
+    DateTime? lastAt;
+    final lastRaw = _pick(json, ['lastMessage', 'latestMessage', 'lastMessagePreview', 'preview', 'lastMessageContent']);
+    if (lastRaw is Map) {
+      final m = Map<String, dynamic>.from(lastRaw);
+      last = _str(_pick(m, ['content', 'text', 'body', 'message'])) ?? '';
+      lastAt = _date(_pick(m, ['createdAt', 'timestamp']));
+    } else if (lastRaw != null) {
+      last = _str(lastRaw) ?? '';
+    } else if (json['messages'] is List && (json['messages'] as List).isNotEmpty) {
+      final first = (json['messages'] as List).first;
+      if (first is Map) {
+        final m = Map<String, dynamic>.from(first);
+        last = _str(_pick(m, ['content', 'text', 'body', 'message'])) ?? '';
+        lastAt = _date(_pick(m, ['createdAt', 'timestamp']));
+      }
+    }
+    lastAt ??= _date(_pick(json, ['lastMessageAt', 'updatedAt', 'createdAt']));
+
+    final status = (_str(json['status']) ?? '').toUpperCase();
+    final aiRaw = _pick(json, ['aiEnabled', 'aiActive', 'autoReply']);
+    final aiEnabled = aiRaw is bool ? aiRaw : !status.contains('HUMAN');
+
+    return Conversation(
+      id: _str(json['id']) ?? '',
+      name: shownName,
+      lastMessage: last,
+      lastAt: lastAt,
+      channel: (_str(json['channel']) ?? '').toLowerCase().contains('insta')
+          ? Channel.instagram
+          : Channel.whatsapp,
+      unread: _int(_pick(json, ['unreadCount', 'unread'])),
+      aiEnabled: aiEnabled,
+      leadStatus: _str(_pick(lead, ['status', 'stage'])) ?? _str(_pick(json, ['leadStatus', 'stage'])),
+    );
+  }
 }
 
-const _general = ChatTag('General', AppColors.textSecondary, AppColors.surfaceSecondary);
+List<dynamic> extractList(dynamic data) {
+  if (data is List) return data;
+  if (data is Map) {
+    for (final key in ['data', 'items', 'conversations', 'messages', 'results']) {
+      final v = data[key];
+      if (v is List) return v;
+      if (v is Map) {
+        final inner = extractList(v);
+        if (inner.isNotEmpty) return inner;
+      }
+    }
+  }
+  return const [];
+}
 
-const _newLead = ChatTag('New Lead', AppColors.primary, AppColors.primaryLight);
+String formatClock(DateTime? d) {
+  if (d == null) return '';
+  final t = d.toLocal();
+  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+  final m = t.minute.toString().padLeft(2, '0');
+  return '$h:$m ${t.hour >= 12 ? 'PM' : 'AM'}';
+}
 
-const List<ChatMessage> _anjaliMessages = [
-  ChatMessage('Hi, I would like to know more about your services.', '10:24 AM', Sender.customer),
-  ChatMessage('Hi! 👋 Thanks for reaching out. We\'d be happy to help you. Could you please share what service you are interested in?', '10:24 AM', Sender.bot),
-  ChatMessage('Do you have a pricing plan for small businesses?', '10:26 AM', Sender.customer),
-  ChatMessage('Yes, we do have a special plan for small businesses. Our starting plan is ₹2,499 per month. Would you like me to share the full details?', '10:28 AM', Sender.agent),
-  ChatMessage('Yes please. Also, do you offer a free trial?', '10:29 AM', Sender.customer),
-  ChatMessage('Yes, we offer a 7-day free trial. You can try all the features before choosing a plan. Would you like me to send the signup link?', '10:29 AM', Sender.bot),
-  ChatMessage('Sure, please send the link.', '10:30 AM', Sender.customer),
-];
+String formatAgo(DateTime? d) {
+  if (d == null) return '';
+  final diff = DateTime.now().difference(d.toLocal());
+  if (diff.inMinutes < 1) return 'now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+  if (diff.inHours < 24) return '${diff.inHours}h';
+  return '${diff.inDays}d';
+}
 
-const List<Conversation> dummyConversations = [
-  Conversation(
-    name: 'Rahul Kumar',
-    lastMessage: 'Is this product available in different colors?',
-    time: '2m',
-    channel: Channel.whatsapp,
-    unread: 2,
-    tags: [_newLead, ChatTag('Product', AppColors.textSecondary, AppColors.surfaceSecondary)],
-    messages: [
-      ChatMessage('Is this product available in different colors?', '10:40 AM', Sender.customer),
-    ],
-  ),
-  Conversation(
-    name: 'Anjali Thomas',
-    lastMessage: 'Can you share the price details and delivery time?',
-    time: '12m',
-    channel: Channel.instagram,
-    unread: 1,
-    tags: [
-      ChatTag('Interested', AppColors.success, AppColors.successLight),
-      ChatTag('Pricing', AppColors.textSecondary, AppColors.surfaceSecondary),
-    ],
-    messages: _anjaliMessages,
-  ),
-  Conversation(
-    name: 'Mohammed Ali',
-    lastMessage: 'Thank you for the information!',
-    time: '25m',
-    channel: Channel.whatsapp,
-    botActive: true,
-    tags: [ChatTag('Bot Active', AppColors.info, AppColors.infoLight), _general],
-    messages: [
-      ChatMessage('Thank you for the information!', '10:05 AM', Sender.customer),
-    ],
-  ),
-  Conversation(
-    name: 'Sarah Wilson',
-    lastMessage: 'Do you have home delivery in Kochi?',
-    time: '1h',
-    channel: Channel.instagram,
-    unread: 3,
-    tags: [_newLead, ChatTag('Delivery', AppColors.textSecondary, AppColors.surfaceSecondary)],
-    messages: [
-      ChatMessage('Do you have home delivery in Kochi?', '9:30 AM', Sender.customer),
-    ],
-  ),
-  Conversation(
-    name: 'Arjun Nair',
-    lastMessage: 'I would like to book an appointment.',
-    time: '2h',
-    channel: Channel.whatsapp,
-    tags: [
-      ChatTag('Contacted', AppColors.warning, AppColors.warningLight),
-      ChatTag('Booking', AppColors.textSecondary, AppColors.surfaceSecondary),
-    ],
-    messages: [
-      ChatMessage('I would like to book an appointment.', '8:45 AM', Sender.customer),
-    ],
-  ),
-  Conversation(
-    name: 'Priya Menon',
-    lastMessage: 'Is this still available?',
-    time: '4h',
-    channel: Channel.instagram,
-    tags: [
-      ChatTag('Follow Up', AppColors.error, AppColors.errorLight),
-      ChatTag('Product', AppColors.textSecondary, AppColors.surfaceSecondary),
-    ],
-    messages: [
-      ChatMessage('Is this still available?', '6:50 AM', Sender.customer),
-    ],
-  ),
-  Conversation(
-    name: 'Vishnu Raj',
-    lastMessage: 'Great! I will confirm and place the order.',
-    time: '5h',
-    channel: Channel.whatsapp,
-    tags: [
-      ChatTag('Converted', AppColors.success, AppColors.successLight),
-      ChatTag('Order', AppColors.textSecondary, AppColors.surfaceSecondary),
-    ],
-    messages: [
-      ChatMessage('Great! I will confirm and place the order.', '5:30 AM', Sender.customer),
-    ],
-  ),
-];
+ChatTag _leadTag(String status) {
+  final label = status
+      .toLowerCase()
+      .split('_')
+      .where((w) => w.isNotEmpty)
+      .map((w) => w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+  final s = status.toLowerCase();
+
+  if (s.contains('new')) return ChatTag(label, AppColors.primary, AppColors.primaryLight);
+  if (s.contains('follow') || s.contains('lost')) {
+    return ChatTag(label, AppColors.error, AppColors.errorLight);
+  }
+  if (s.contains('contact')) return ChatTag(label, AppColors.warning, AppColors.warningLight);
+  if (s.contains('interest') || s.contains('qualif') || s.contains('convert') || s.contains('won')) {
+    return ChatTag(label, AppColors.success, AppColors.successLight);
+  }
+  return ChatTag(label, AppColors.textSecondary, AppColors.surfaceSecondary);
+}
+
+dynamic _pick(Map<String, dynamic> json, List<String> keys) {
+  for (final k in keys) {
+    if (json[k] != null) return json[k];
+  }
+  return null;
+}
+
+Map<String, dynamic>? _map(dynamic v) => v is Map ? Map<String, dynamic>.from(v) : null;
+
+String? _str(dynamic v) {
+  if (v == null) return null;
+  final s = v.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
+int _int(dynamic v) {
+  if (v is int) return v;
+  return int.tryParse(v?.toString() ?? '') ?? 0;
+}
+
+DateTime? _date(dynamic v) => v == null ? null : DateTime.tryParse(v.toString());

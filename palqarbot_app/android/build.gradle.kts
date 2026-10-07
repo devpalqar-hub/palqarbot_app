@@ -16,6 +16,15 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
+    afterEvaluate {
+        if (plugins.hasPlugin("com.android.library")) {
+            extensions.findByName("android")?.withGroovyBuilder {
+                "compileSdkVersion"(36)
+            }
+        }
+    }
+}
+subprojects {
     project.evaluationDependsOn(":app")
 }
 
