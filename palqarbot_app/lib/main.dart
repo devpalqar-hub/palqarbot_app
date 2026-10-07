@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import 'package:palqarbot_app/Core/Theme/app_colors.dart';
+import 'package:palqarbot_app/Core/Theme/app_theme.dart';
+
+import 'package:palqarbot_app/Screens/Auth/Service/auth_controller.dart';
+import 'package:palqarbot_app/Screens/Auth/login_screen.dart';
+
 import 'package:palqarbot_app/Screens/Inbox/inboxscreen.dart';
 import 'package:palqarbot_app/Screens/Settings/SettingsScreen.dart';
 import 'package:palqarbot_app/Screens/bot/BotScreen.dart';
 import 'package:palqarbot_app/Screens/leads/LeadsScreen.dart';
 
-import 'package:palqarbot_app/Core/Theme/app_colors.dart';
-import 'package:palqarbot_app/Core/Theme/app_textstyles.dart';
-import 'package:palqarbot_app/Core/Theme/app_theme.dart';
-
-
 void main() {
-  runApp(const PalqarbotApp());
+  WidgetsFlutterBinding.ensureInitialized();
+
+  Get.put(
+    AuthController(),
+    permanent: true,
+  );
+
+  runApp(
+    const PalqarbotApp(),
+  );
 }
 
 class PalqarbotApp extends StatelessWidget {
@@ -18,14 +30,105 @@ class PalqarbotApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return GetMaterialApp(
       title: 'Palqarbot',
+
       debugShowCheckedModeBanner: false,
+
       theme: AppTheme.light,
-      home: const HomeScreen(),
+
+      // ========================================================
+      // GETX ROUTES
+      // ========================================================
+
+      getPages: [
+        GetPage(
+          name: '/login',
+          page: () => const LoginScreen(),
+        ),
+
+        GetPage(
+          name: '/home',
+          page: () => const HomeScreen(),
+        ),
+      ],
+
+      // ========================================================
+      // INITIAL AUTH CHECK
+      // ========================================================
+
+      home: const AuthGate(),
     );
   }
 }
+
+// ============================================================
+// AUTH GATE
+// ============================================================
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final AuthController _authController;
+
+  late final Future<bool> _authenticationFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _authController = Get.find<AuthController>();
+
+    // Run authentication check only once.
+    _authenticationFuture =
+        _authController.isLoggedIn();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _authenticationFuture,
+
+      builder: (context, snapshot) {
+        // ======================================================
+        // LOADING
+        // ======================================================
+
+        if (snapshot.connectionState ==
+            ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // ======================================================
+        // AUTHENTICATED
+        // ======================================================
+
+        if (snapshot.data == true) {
+          return const HomeScreen();
+        }
+
+        // ======================================================
+        // NOT AUTHENTICATED
+        // ======================================================
+
+        return const LoginScreen();
+      },
+    );
+  }
+}
+
+// ============================================================
+// HOME SCREEN
+// ============================================================
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,13 +140,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  static const List<String> _titles = [
-    'Inbox',
-    'Leads',
-    'Bot',
-    'Settings',
-  ];
-
   static const List<Widget> _screens = [
     InboxScreen(),
     LeadsScreen(),
@@ -54,49 +150,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 20,
-        title: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: const Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 18,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              _titles[_selectedIndex],
-              style: AppTextStyles.title,
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(
-              Icons.notifications_none_rounded,
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-
       body: SafeArea(
         top: false,
+
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: 820,
             ),
+
             child: IndexedStack(
               index: _selectedIndex,
               children: _screens,
@@ -105,19 +167,32 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
+      // ========================================================
+      // BOTTOM NAVIGATION
+      // ========================================================
+
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
-          indicatorColor: AppColors.primaryLight,
+          indicatorColor:
+              AppColors.primaryLight,
 
-          labelTextStyle: WidgetStateProperty.resolveWith(
+          // ====================================================
+          // LABEL STYLE
+          // ====================================================
+
+          labelTextStyle:
+              WidgetStateProperty.resolveWith(
             (states) {
               final selected =
-                  states.contains(WidgetState.selected);
+                  states.contains(
+                WidgetState.selected,
+              );
 
               return TextStyle(
                 color: selected
                     ? AppColors.primary
                     : Colors.grey,
+
                 fontWeight: selected
                     ? FontWeight.w600
                     : FontWeight.w500,
@@ -125,15 +200,23 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
 
-          iconTheme: WidgetStateProperty.resolveWith(
+          // ====================================================
+          // ICON STYLE
+          // ====================================================
+
+          iconTheme:
+              WidgetStateProperty.resolveWith(
             (states) {
               final selected =
-                  states.contains(WidgetState.selected);
+                  states.contains(
+                WidgetState.selected,
+              );
 
               return IconThemeData(
                 color: selected
                     ? AppColors.primary
                     : Colors.grey,
+
                 size: 24,
               );
             },
@@ -144,7 +227,8 @@ class _HomeScreenState extends State<HomeScreen> {
           selectedIndex: _selectedIndex,
 
           labelBehavior:
-              NavigationDestinationLabelBehavior.alwaysShow,
+              NavigationDestinationLabelBehavior
+                  .alwaysShow,
 
           onDestinationSelected: (index) {
             setState(() {
@@ -153,43 +237,67 @@ class _HomeScreenState extends State<HomeScreen> {
           },
 
           destinations: const [
+            // ==================================================
+            // INBOX
+            // ==================================================
+
             NavigationDestination(
               icon: Icon(
                 Icons.inbox_outlined,
               ),
+
               selectedIcon: Icon(
                 Icons.inbox_rounded,
               ),
+
               label: 'Inbox',
             ),
+
+            // ==================================================
+            // LEADS
+            // ==================================================
 
             NavigationDestination(
               icon: Icon(
                 Icons.people_outline_rounded,
               ),
+
               selectedIcon: Icon(
                 Icons.people_rounded,
               ),
+
               label: 'Leads',
             ),
+
+            // ==================================================
+            // BOT
+            // ==================================================
 
             NavigationDestination(
               icon: Icon(
                 Icons.auto_awesome_outlined,
               ),
+
               selectedIcon: Icon(
                 Icons.auto_awesome_rounded,
               ),
+
               label: 'Bot',
             ),
+
+            // ==================================================
+            // SETTINGS
+            // ==================================================
 
             NavigationDestination(
               icon: Icon(
                 Icons.settings_outlined,
               ),
+
               selectedIcon: Icon(
                 Icons.settings_rounded,
               ),
+
               label: 'Settings',
             ),
           ],

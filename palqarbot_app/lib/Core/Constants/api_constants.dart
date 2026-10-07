@@ -1,12 +1,35 @@
+
 class ApiConstants {
   ApiConstants._();
 
   static const String baseUrl =
-      'https://api.example.com/api/v1';
+      'https://mybotapi.palqar.com/api';
 
-  // Auth
-  static const String login = '/auth/login';
-  static const String register = '/auth/register';
-  static const String me = '/auth/me';
+  static const String login =
+      '$baseUrl/auth/login';
 
+  static const String register =
+      '$baseUrl/auth/register';
+
+  static const String me =
+      '$baseUrl/auth/me';
+
+
+  static String systemPrompt(String profileId) =>
+      '$baseUrl/profiles/$profileId/inbox/system-prompt';
+
+  static const String profiles =
+      '$baseUrl/profile';
+   static const String addprofiles =
+      '$baseUrl/profiles';
+
+  static String profile(String profileId) =>
+      '$baseUrl/profiles/$profileId';
+
+
+  static String whatsapp(String profileId) =>
+      '$baseUrl/profiles/$profileId/whatsapp';
+
+  static String instagram(String profileId) =>
+      '$baseUrl/profiles/$profileId/instagram';
 }
