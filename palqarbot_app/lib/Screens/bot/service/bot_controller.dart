@@ -1,17 +1,13 @@
-
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
-import 'package:palqarbot_app/Core/Constants/api_constants.dart';
-import 'package:palqarbot_app/Core/Network/api_client.dart';
 import 'package:palqarbot_app/Screens/Settings/service/profile_setting_controller.dart';
 
 class BotController extends GetxController {
-  final ApiClient _apiClient = ApiClient();
+  // ===========================================================================
+  // CONTROLLER
+  // ===========================================================================
 
-  bool isSaving = false;
-
-  // Get the existing ProfileSettingsController
   ProfileSettingsController get profileSettingsController {
     if (!Get.isRegistered<ProfileSettingsController>()) {
       Get.put(ProfileSettingsController());
@@ -20,17 +16,89 @@ class BotController extends GetxController {
     return Get.find<ProfileSettingsController>();
   }
 
-  // ============================================================
+  // ===========================================================================
+  // STATES
+  // ===========================================================================
+
+  bool isSaving = false;
+  bool isLoading = false;
+
+  // ===========================================================================
+  // GETTERS
+  // ===========================================================================
+
+  String get profileId {
+    return profileSettingsController.profileId;
+  }
+
+  String get systemPrompt {
+    return profileSettingsController.systemPrompt;
+  }
+
+  // ===========================================================================
+  // LOAD SYSTEM PROMPT
+  // ===========================================================================
+
+  Future<bool> loadSystemPrompt() async {
+    isLoading = true;
+    update();
+
+    try {
+      final settingsController = profileSettingsController;
+
+      // ---------------------------------------------------------------
+      // If profile is already loaded, no need to call API again
+      // ---------------------------------------------------------------
+
+      if (settingsController.selectedProfile != null) {
+        isLoading = false;
+        update();
+
+        return true;
+      }
+
+      // ---------------------------------------------------------------
+      // Load user + selected profile
+      // ---------------------------------------------------------------
+
+      final success = await settingsController.loadSettings();
+
+      isLoading = false;
+      update();
+
+      if (!success) {
+        debugPrint('BOT: Failed to load profile settings');
+
+        return false;
+      }
+
+      debugPrint('BOT: System prompt loaded successfully');
+
+      return true;
+    } catch (e, stackTrace) {
+      debugPrint('BOT: Load system prompt exception: $e');
+
+      debugPrint('$stackTrace');
+
+      isLoading = false;
+      update();
+
+      return false;
+    }
+  }
+
+  // ===========================================================================
   // UPDATE SYSTEM PROMPT
-  // ============================================================
+  // ===========================================================================
 
   Future<bool> updateSystemPrompt(String prompt) async {
-    final profileId = profileSettingsController.profileId;
+    final settingsController = profileSettingsController;
 
-    if (profileId.isEmpty) {
-      debugPrint(
-        'BOT: Profile ID is empty',
-      );
+    final id =
+        settingsController.selectedProfile?.id ?? settingsController.profileId;
+
+    if (id.isEmpty) {
+      debugPrint('BOT: Profile ID is empty');
 
       return false;
     }
@@ -38,47 +106,34 @@ class BotController extends GetxController {
     isSaving = true;
     update();
 
+    final currentProfile = settingsController.selectedProfile;
 
-    final endpoint = ApiConstants.systemPrompt(profileId);
+    if (currentProfile == null) {
+      isSaving = false;
+      update();
 
-    debugPrint('');
-    debugPrint('==========================================');
-    debugPrint('BOT - UPDATE SYSTEM PROMPT');
-    debugPrint('==========================================');
-    debugPrint('PROFILE ID: $profileId');
-    debugPrint('ENDPOINT  : $endpoint');
-    debugPrint('==========================================');
-    debugPrint('');
-
-    try {
-      final response = await _apiClient.patch(
-        endpoint,
-        body: {
-          'systemPrompt': prompt,
-        },
-      );
-
-      if (response.success) {
-        debugPrint(
-          'BOT: System prompt updated successfully',
-        );
-
-        return true;
-      }
-
-      debugPrint(
-        'BOT: Failed to update system prompt',
-      );
-
-      debugPrint(
-        'MESSAGE: ${response.message}',
-      );
+      debugPrint('BOT: Selected profile is null');
 
       return false;
-    } catch (e, stackTrace) {
-      debugPrint(
-        'BOT: Update system prompt exception: $e',
+    }
+
+    try {
+      final success = await settingsController.updateProfile(
+        id: id,
+        name: currentProfile.name,
+        systemPrompt: prompt,
+        autoReplyEnabled: currentProfile.autoReplyEnabled,
       );
+
+      if (success) {
+        debugPrint('BOT: System prompt updated successfully');
+      } else {
+        debugPrint('BOT: Failed to update system prompt');
+      }
+
+      return success;
+    } catch (e, stackTrace) {
+      debugPrint('BOT: Update system prompt exception: $e');
 
       debugPrint('$stackTrace');
 
@@ -89,9 +144,12 @@ class BotController extends GetxController {
     }
   }
 
+  // ===========================================================================
+  // DISPOSE
+  // ===========================================================================
+
   @override
   void onClose() {
-    _apiClient.dispose();
     super.onClose();
   }
 }

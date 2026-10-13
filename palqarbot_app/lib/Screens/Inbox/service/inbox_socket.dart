@@ -39,7 +39,10 @@ class InboxSocket {
 
     socket.on('connected', (_) => debugPrint('SOCKET: connected'));
     socket.on('message.new', (d) => onEvent('message.new', d));
-    socket.on('conversation.updated', (d) => onEvent('conversation.updated', d));
+    socket.on(
+      'conversation.updated',
+      (d) => onEvent('conversation.updated', d),
+    );
 
     socket.on('error', (e) {
       debugPrint('SOCKET: error $e');

@@ -1,11 +1,11 @@
+
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
 import 'package:palqarbot_app/Core/Theme/app_colors.dart';
-import 'package:palqarbot_app/Core/Theme/app_textstyles.dart';
 import 'package:palqarbot_app/Screens/Auth/Service/auth_controller.dart';
 import 'package:palqarbot_app/Screens/Auth/register_screen.dart';
-import 'package:palqarbot_app/main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,13 +17,11 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   late final AuthController _controller;
 
-  final TextEditingController _emailController =
-      TextEditingController();
-
-  final TextEditingController _passwordController =
-      TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
+  bool _rememberMe = true;
 
   @override
   void initState() {
@@ -41,57 +39,142 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-Future<void> _login() async {
-  FocusScope.of(context).unfocus();
+  // ===========================================================================
+  // LOGIN
+  // ===========================================================================
 
-  final email = _emailController.text.trim();
-  final password = _passwordController.text;
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
 
-  if (email.isEmpty || password.isEmpty) {
-    return;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _message(
+        'Required fields',
+        'Please enter your email and password.',
+      );
+      return;
+    }
+
+    if (!GetUtils.isEmail(email)) {
+      _message(
+        'Invalid email',
+        'Please enter a valid email address.',
+      );
+      return;
+    }
+
+    final success = await _controller.login(
+      email: email,
+      password: password,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      Get.offAllNamed('/bottombar');
+    }
   }
 
-  final success = await _controller.login(
-    email: email,
-    password: password,
-  );
+  // ===========================================================================
+  // MESSAGE
+  // ===========================================================================
 
-  if (!mounted) return;
-
-  if (success) {
-    Get.offAllNamed('/home');
+  void _message(String title, String message) {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      margin: EdgeInsets.all(16.r),
+    );
   }
-}
+
+  // ===========================================================================
+  // BUILD
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 10,
-            ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            16.w,
+            10.h,
+            16.w,
+            10.h,
+          ),
+          child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 500,
-              ),
-              child: GetBuilder<AuthController>(
-                builder: (controller) {
-                  return Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+              constraints: BoxConstraints(maxWidth: 460.w),
+              child: Stack(
+                children: [
+                  // Background image.
+                  Positioned(
+                    top: 155.h,
+                    left: 0,
+                    right: 0,
+                    height: 300.h,
+                    child: IgnorePointer(
+                      child: Image.asset(
+                        'assets/palqarbot.png',
+                        fit: BoxFit.contain,
+                        alignment: Alignment.topCenter,
+                        errorBuilder: (_, __, ___) {
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ),
+                  ),
+
+                  // Welcome text and login card.
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildHeader(),
+                      SizedBox(height: 25.h),
 
-                      const SizedBox(height: 30),
+                      const _RobotBadge(),
 
-                      _buildLoginCard(controller),
+                      SizedBox(height: 20.h),
+
+                      Text(
+                        'Welcome back',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 27.sp,
+                          height: 1.08,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+
+                      SizedBox(height: 6.h),
+
+                      Text(
+                        'Sign in to manage your AI assistant.',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14.sp,
+                        ),
+                      ),
+
+                      SizedBox(height: 230.h),
+
+                      Expanded(
+                        child: GetBuilder<AuthController>(
+                          builder: (controller) {
+                            return _loginCard(
+                              compact: false,
+                              loading: controller.isLoading,
+                            );
+                          },
+                        ),
+                      ),
                     ],
-                  );
-                },
+                  ),
+                ],
               ),
             ),
           ),
@@ -100,260 +183,259 @@ Future<void> _login() async {
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.smart_toy_outlined,
-            color: Colors.white,
-            size: 28,
-          ),
-        ),
+  // ===========================================================================
+  // LOGIN CARD
+  // ===========================================================================
 
-        const SizedBox(height: 24),
-
-        Text(
-          'Welcome back',
-          style: AppTextStyles.title.copyWith(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        Text(
-          'Sign in to manage your AI assistant.',
-          style: AppTextStyles.body.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoginCard(
-    AuthController controller,
-  ) {
+  Widget _loginCard({
+    required bool compact,
+    required bool loading,
+  }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(
+        20.w,
+        25.h,
+        20.w,
+        0,
+      ),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface.withValues(alpha: 0.97),
+        borderRadius: BorderRadius.circular(22.r),
         border: Border.all(
-          color: AppColors.border,
+          color: AppColors.border.withValues(alpha: 0.8),
+          width: 1.w,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.07),
+            blurRadius: 28.r,
+            offset: Offset(0, 10.h),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Sign in',
-            style: AppTextStyles.titleMedium.copyWith(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          _label('Email'),
 
-          const SizedBox(height: 22),
+          SizedBox(height: 12.h),
 
-          _buildLabel('Email'),
-
-          const SizedBox(height: 8),
-
-          _buildTextField(
+          _field(
             controller: _emailController,
             hint: 'Enter your email',
-            keyboardType:
-                TextInputType.emailAddress,
-            prefixIcon: Icons.email_outlined,
+            icon: Icons.mail_outline_rounded,
+            keyboardType: TextInputType.emailAddress,
           ),
 
-          const SizedBox(height: 18),
+          SizedBox(height: 18.h),
 
-          _buildLabel('Password'),
+          _label('Password'),
 
-          const SizedBox(height: 8),
+          SizedBox(height: 12.h),
 
-          _buildTextField(
+          _field(
             controller: _passwordController,
             hint: 'Enter your password',
+            icon: Icons.lock_outline_rounded,
             obscureText: _obscurePassword,
-            prefixIcon: Icons.lock_outline,
-            suffixIcon: IconButton(
+            suffix: IconButton(
+              visualDensity: VisualDensity.compact,
               onPressed: () {
                 setState(() {
-                  _obscurePassword =
-                      !_obscurePassword;
+                  _obscurePassword = !_obscurePassword;
                 });
               },
               icon: Icon(
                 _obscurePassword
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
+                size: 20.sp,
                 color: AppColors.textSecondary,
               ),
             ),
           ),
 
-          const SizedBox(height: 24),
+          // SIGN IN BUTTON
+          SizedBox(height: 30.h),
 
           SizedBox(
             width: double.infinity,
-            height: 46,
+            height: compact ? 46.h : 50.h,
             child: ElevatedButton(
-              onPressed:
-                  controller.isLoading
-                      ? null
-                      : _login,
+              onPressed: loading ? null : _login,
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    AppColors.primary,
-                foregroundColor:
-                    AppColors.textWhite,
-                disabledBackgroundColor:
-                    AppColors.primary,
-                disabledForegroundColor:
-                    AppColors.textWhite,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(13.r),
                 ),
               ),
-              child: controller.isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child:
-                          CircularProgressIndicator(
+              child: loading
+                  ? SizedBox(
+                      width: 20.w,
+                      height: 20.h,
+                      child: const CircularProgressIndicator(
                         strokeWidth: 2,
                         color: Colors.white,
                       ),
                     )
                   : Text(
                       'Sign in',
-                      style:
-                          AppTextStyles.button.copyWith(
-                        fontSize: 14,
-                        fontWeight:
-                            FontWeight.w600,
+                      style: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
             ),
           ),
 
-          const SizedBox(height: 22),
+          SizedBox(height: 30.h),
 
-          Row(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-            children: [
-              Text(
-                "Don't have an account? ",
-                style:
-                    AppTextStyles.bodySmall.copyWith(
-                  color:
-                      AppColors.textSecondary,
-                ),
-              ),
-
-              GestureDetector(
-                onTap: () {
-                  Get.to(
-                    () => const RegisterScreen(),
-                  );
-                },
-                child: Text(
-                  'Register',
-                  style:
-                      AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.primary,
-                    fontWeight:
-                        FontWeight.w600,
+          // REGISTER LINK
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                Text(
+                  "Don't have an account? ",
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-              ),
-            ],
+                GestureDetector(
+                  onTap: () {
+                    Get.to(() => const RegisterScreen());
+                  },
+                  child: Text(
+                    'Register',
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLabel(String text) {
+  // ===========================================================================
+  // FIELD LABEL
+  // ===========================================================================
+
+  Widget _label(String text) {
     return Text(
       text,
-      style: AppTextStyles.bodySmall.copyWith(
-        fontWeight: FontWeight.w600,
+      style: TextStyle(
+        fontSize: 12.sp,
+        fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
       ),
     );
   }
 
-  Widget _buildTextField({
+  // ===========================================================================
+  // TEXT FIELD
+  // ===========================================================================
+
+  Widget _field({
     required TextEditingController controller,
     required String hint,
-    required IconData prefixIcon,
+    required IconData icon,
     TextInputType? keyboardType,
     bool obscureText = false,
-    Widget? suffixIcon,
+    Widget? suffix,
   }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      style: AppTextStyles.body.copyWith(
-        fontSize: 14,
-        color: AppColors.textPrimary,
+    return SizedBox(
+      height: 42.h,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        autocorrect: !obscureText,
+        enableSuggestions: !obscureText,
+        style: TextStyle(
+          fontSize: 12.sp,
+          color: AppColors.textPrimary,
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(
+            fontSize: 12.sp,
+            color: AppColors.textSecondary,
+          ),
+          prefixIcon: Icon(
+            icon,
+            size: 18.sp,
+            color: AppColors.textSecondary,
+          ),
+          prefixIconConstraints: BoxConstraints(
+            minWidth: 40.w,
+          ),
+          suffixIcon: suffix,
+          suffixIconConstraints: BoxConstraints(
+            minWidth: 38.w,
+          ),
+          filled: true,
+          fillColor: AppColors.background,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 10.w,
+            vertical: 8.h,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(
+              color: AppColors.border,
+              width: 1.w,
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(
+              color: AppColors.border,
+              width: 1.w,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(
+              color: AppColors.primary,
+              width: 1.4.w,
+            ),
+          ),
+        ),
       ),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle:
-            AppTextStyles.bodySmall.copyWith(
-          color: AppColors.textSecondary,
-        ),
-        prefixIcon: Icon(
-          prefixIcon,
-          size: 20,
-          color: AppColors.textSecondary,
-        ),
-        suffixIcon: suffixIcon,
-        filled: true,
-        fillColor: AppColors.background,
-        border: OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: AppColors.border,
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: AppColors.border,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: AppColors.primary,
-          ),
-        ),
+    );
+  }
+}
+
+// ===========================================================================
+// ROBOT BADGE
+// ===========================================================================
+
+class _RobotBadge extends StatelessWidget {
+  const _RobotBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48.w,
+      height: 48.h,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2F0FF),
+        borderRadius: BorderRadius.circular(13.r),
+      ),
+      child: Icon(
+        Icons.smart_toy_rounded,
+        color: AppColors.primary,
+        size: 29.sp,
       ),
     );
   }

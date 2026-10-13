@@ -8,146 +8,123 @@ import 'package:palqarbot_app/Screens/Settings/Model/profile_setting_model.dart'
 class ProfileSettingsController extends GetxController {
   final ApiClient _apiClient = ApiClient();
 
-  // ===========================================================================
-  // LOADING STATES
-  // ===========================================================================
+  // ============================================================
+  // GENERAL STATE
+  // ============================================================
 
   bool isLoading = false;
   bool isSaving = false;
   bool isDeleting = false;
 
-  // ===========================================================================
-  // MODELS
-  // ===========================================================================
-
-  /// Data returned from GET /auth/me
   ProfileSettingsModel? profileSettings;
-
-  /// Data returned from GET /profiles/{profileId}
   ProfileModel? selectedProfile;
 
-  // ===========================================================================
-  // GETTERS
-  // ===========================================================================
+  // ============================================================
+  // OPEN WHATSAPP STATE
+  // ============================================================
 
-  /// Profile ID is obtained from:
-  ///
-  /// /auth/me
-  ///   -> userProfiles[0]
-  ///      -> profile
-  ///         -> id
-  ///
-  /// This ID is then used for:
-  ///
-  /// GET /profiles/{profileId}
+  String openWaQrCode = '';
+  String openWaPairingCode = '';
+  String openWaPhoneNumber = '';
+  String openWaSessionStatus = '';
+  String openWaConnectedNumber = '';
+
+  bool isOpenWaConnecting = false;
+  bool isOpenWaActivating = false;
+  bool isOpenWaPolling = false;
+  bool isOpenWaConnected = false;
+
+  // ============================================================
+  // PROFILE GETTERS
+  // ============================================================
+
   String get profileId {
-    if (profileSettings == null) {
-      return '';
-    }
+    final profiles = profileSettings?.userProfiles ?? [];
 
-    if (profileSettings!.userProfiles.isEmpty) {
-      return '';
-    }
+    if (profiles.isEmpty) return '';
 
-    return profileSettings!
-        .userProfiles
-        .first
-        .profile
-        .id;
+    return profiles.first.profile.id;
   }
 
-  ProfileModel? get profile {
-    return selectedProfile;
-  }
-
-  // ===========================================================================
-  // USER INFORMATION
-  // ===========================================================================
+  ProfileModel? get profile => selectedProfile;
 
   String get fullName {
-    if (profileSettings == null) {
-      return '';
-    }
+    if (profileSettings == null) return '';
 
     return '${profileSettings!.firstName} '
-        '${profileSettings!.lastName}'.trim();
+            '${profileSettings!.lastName}'
+        .trim();
   }
 
-  String get email {
-    return profileSettings?.email ?? '';
+  String get email => profileSettings?.email ?? '';
+
+  String get role => profileSettings?.role ?? '';
+
+  String get profileName => selectedProfile?.name ?? '';
+
+  String get profileSlug => selectedProfile?.slug ?? '';
+
+  String get systemPrompt => selectedProfile?.systemPrompt ?? '';
+
+  bool get autoReplyEnabled => selectedProfile?.autoReplyEnabled ?? false;
+
+  // ============================================================
+  // WHATSAPP CLOUD API GETTERS
+  // ============================================================
+
+  WhatsAppConfigModel? get whatsappConfig => selectedProfile?.whatsappConfig;
+
+  bool get whatsappEnabled => whatsappConfig?.enabled ?? false;
+
+  bool get hasWhatsappConfig => whatsappConfig != null;
+
+  String get whatsappPhoneNumberId => whatsappConfig?.phoneNumberId ?? '';
+
+  String get whatsappBusinessAccountId =>
+      whatsappConfig?.businessAccountId ?? '';
+
+  // ============================================================
+  // INSTAGRAM GETTERS
+  // ============================================================
+
+  InstagramConfigModel? get instagramConfig => selectedProfile?.instagramConfig;
+
+  bool get instagramIsEnabled => instagramConfig?.enabled ?? false;
+
+  bool get hasInstagramConfig => instagramConfig != null;
+
+  String get instagramAccountId => instagramConfig?.accountId ?? '';
+
+  // ============================================================
+  // OPEN WHATSAPP STATUS
+  // ============================================================
+
+  String get openWaStatusLabel {
+    if (isOpenWaConnected) return 'Connected';
+
+    switch (openWaSessionStatus.toUpperCase()) {
+      case 'QR_PENDING':
+        return 'Waiting for QR scan';
+      case 'CONNECTING':
+        return 'Connecting...';
+      case 'READY':
+        return 'Ready to pair';
+      case 'AUTHENTICATED':
+        return 'Authenticated';
+      case 'CONNECTED':
+        return 'Connected';
+      case 'DISCONNECTED':
+        return 'Disconnected';
+      default:
+        return openWaSessionStatus.isEmpty
+            ? 'Not connected'
+            : openWaSessionStatus.replaceAll('_', ' ');
+    }
   }
 
-  String get role {
-    return profileSettings?.role ?? '';
-  }
-
-  // ===========================================================================
-  // PROFILE INFORMATION
-  // ===========================================================================
-
-  String get profileName {
-    return selectedProfile?.name ?? '';
-  }
-
-  String get profileSlug {
-    return selectedProfile?.slug ?? '';
-  }
-
-  String get systemPrompt {
-    return selectedProfile?.systemPrompt ?? '';
-  }
-
-  bool get autoReplyEnabled {
-    return selectedProfile?.autoReplyEnabled ?? false;
-  }
-
-  // ===========================================================================
-  // WHATSAPP
-  // ===========================================================================
-
-  WhatsAppConfigModel? get whatsappConfig {
-    return selectedProfile?.whatsappConfig;
-  }
-
-  bool get whatsappEnabled {
-    return whatsappConfig?.enabled ?? false;
-  }
-
-  bool get hasWhatsappConfig {
-    return whatsappConfig != null;
-  }
-
-  String get whatsappPhoneNumberId {
-    return whatsappConfig?.phoneNumberId ?? '';
-  }
-
-  String get whatsappBusinessAccountId {
-    return whatsappConfig?.businessAccountId ?? '';
-  }
-
-  // ===========================================================================
-  // INSTAGRAM
-  // ===========================================================================
-
-  InstagramConfigModel? get instagramConfig {
-    return selectedProfile?.instagramConfig;
-  }
-
-  bool get instagramIsEnabled {
-    return instagramConfig?.enabled ?? false;
-  }
-
-  bool get hasInstagramConfig {
-    return instagramConfig != null;
-  }
-
-  String get instagramAccountId {
-    return instagramConfig?.accountId ?? '';
-  }
-
-  // ===========================================================================
-  // DEBUG REQUEST
-  // ===========================================================================
+  // ============================================================
+  // DEBUG HELPERS
+  // ============================================================
 
   void _debugRequest({
     required String method,
@@ -156,24 +133,21 @@ class ProfileSettingsController extends GetxController {
   }) {
     if (!kDebugMode) return;
 
-    debugPrint('');
-    debugPrint('==================================================');
-    debugPrint('API REQUEST');
-    debugPrint('==================================================');
-    debugPrint('METHOD   : $method');
-    debugPrint('ENDPOINT : $endpoint');
+    debugPrint('[$method] $endpoint');
 
     if (body != null) {
-      debugPrint('BODY     : $body');
+      // Avoid logging access tokens and secrets.
+      final safeBody = Map<String, dynamic>.from(body);
+
+      for (final key in ['accessToken', 'appSecret', 'verifyToken']) {
+        if (safeBody.containsKey(key)) {
+          safeBody[key] = '***';
+        }
+      }
+
+      debugPrint('Request body: $safeBody');
     }
-
-    debugPrint('==================================================');
-    debugPrint('');
   }
-
-  // ===========================================================================
-  // DEBUG RESPONSE
-  // ===========================================================================
 
   void _debugResponse({
     required String method,
@@ -182,326 +156,566 @@ class ProfileSettingsController extends GetxController {
   }) {
     if (!kDebugMode) return;
 
-    debugPrint('');
-    debugPrint('==================================================');
-    debugPrint('API RESPONSE');
-    debugPrint('==================================================');
-    debugPrint('METHOD   : $method');
-    debugPrint('ENDPOINT : $endpoint');
-    debugPrint('SUCCESS  : ${response.success}');
-    debugPrint('DATA     : ${response.data}');
-    debugPrint('MESSAGE  : ${response.message}');
-    debugPrint('==================================================');
-    debugPrint('');
+    debugPrint('[$method] Response received: $endpoint');
+    debugPrint('Response: $response');
   }
 
-  // ===========================================================================
-  // GET USER INFORMATION
-  // ===========================================================================
+  // ============================================================
+  // RESPONSE PARSER
+  // ============================================================
+
+  Map<String, dynamic> _openWaPayload(dynamic data) {
+    if (data is! Map) {
+      return <String, dynamic>{};
+    }
+
+    final result = Map<String, dynamic>.from(data);
+
+    // Supports APIs returning { data: {...} }.
+    if (result['data'] is Map) {
+      return Map<String, dynamic>.from(result['data'] as Map);
+    }
+
+    return result;
+  }
+
+  // ============================================================
+  // CONNECT WHATSAPP USING QR
+  //
+  // POST /profiles/{profileId}/connect
+  // Body: { "provider": "OPEN_WA" }
+  // ============================================================
+
+  Future<bool> connectOpenWa() async {
+    final id = profileId;
+
+    if (id.isEmpty) {
+      Get.snackbar(
+        'Profile unavailable',
+        'Please load your business profile and try again.',
+      );
+      return false;
+    }
+
+    isOpenWaConnecting = true;
+    openWaQrCode = '';
+    openWaPairingCode = '';
+    openWaPhoneNumber = '';
+    openWaSessionStatus = '';
+    openWaConnectedNumber = '';
+    isOpenWaConnected = false;
+    update();
+
+    final endpoint = ApiConstants.openWaConnect(id);
+
+    try {
+      _debugRequest(
+        method: 'POST',
+        endpoint: endpoint,
+        body: {'provider': 'OPEN_WA'},
+      );
+
+      final response = await _apiClient.post(
+        endpoint,
+        body: {'provider': 'OPEN_WA'},
+      );
+
+      _debugResponse(
+        method: 'POST',
+        endpoint: endpoint,
+        response: response.data,
+      );
+
+      if (!response.success || response.data == null) {
+        Get.snackbar(
+          'Connection failed',
+          'Unable to start the WhatsApp QR connection.',
+        );
+        return false;
+      }
+
+      final data = _openWaPayload(response.data);
+
+      openWaQrCode = data['qrCode']?.toString() ?? '';
+      openWaPairingCode = data['pairingCode']?.toString() ?? '';
+      openWaSessionStatus =
+          data['sessionStatus']?.toString() ?? data['status']?.toString() ?? '';
+
+      openWaConnectedNumber = data['connectedNumber']?.toString() ?? '';
+
+      isOpenWaConnected =
+          openWaSessionStatus.toUpperCase() == 'CONNECTED' ||
+          data['connected'] == true;
+
+      update();
+      return true;
+    } catch (e, stackTrace) {
+      debugPrint('OPEN WA QR CONNECT ERROR: $e');
+      debugPrint('$stackTrace');
+
+      Get.snackbar(
+        'Connection failed',
+        'Something went wrong while starting WhatsApp.',
+      );
+
+      return false;
+    } finally {
+      isOpenWaConnecting = false;
+      update();
+    }
+  }
+
+  // ============================================================
+  // CONNECT WHATSAPP USING PHONE NUMBER
+  //
+  // POST /openwa/connect/phone
+  // Body:
+  // {
+  //   "profileId": "...",
+  //   "phoneNumber": "919895728129"
+  // }
+  // ============================================================
+
+  Future<bool> connectOpenWaWithPhone(String phoneNumber) async {
+    final id = profileId;
+
+    if (id.isEmpty) {
+      Get.snackbar(
+        'Profile unavailable',
+        'Please load your business profile and try again.',
+      );
+      return false;
+    }
+
+    // Accepts numbers with spaces, +, and hyphens.
+    final phone = phoneNumber.replaceAll(RegExp(r'[\s()+-]'), '');
+
+    if (!RegExp(r'^\d{10,15}$').hasMatch(phone)) {
+      Get.snackbar(
+        'Invalid phone number',
+        'Enter a valid phone number with country code.',
+      );
+      return false;
+    }
+
+    isOpenWaConnecting = true;
+    openWaPhoneNumber = phone;
+    openWaPairingCode = '';
+    openWaQrCode = '';
+    openWaConnectedNumber = '';
+    openWaSessionStatus = 'CONNECTING';
+    isOpenWaConnected = false;
+    update();
+
+    try {
+      final endpoint = ApiConstants.openWaConnectPhone;
+
+      final body = <String, dynamic>{'profileId': id, 'phoneNumber': phone};
+
+      _debugRequest(method: 'POST', endpoint: endpoint, body: body);
+
+      final response = await _apiClient.post(endpoint, body: body);
+
+      _debugResponse(
+        method: 'POST',
+        endpoint: endpoint,
+        response: response.data,
+      );
+
+      if (!response.success || response.data == null) {
+        Get.snackbar(
+          'Connection failed',
+          'Unable to start phone-number pairing.',
+        );
+        return false;
+      }
+
+      final data = _openWaPayload(response.data);
+
+      openWaPairingCode = data['pairingCode']?.toString() ?? '';
+
+      openWaSessionStatus =
+          data['sessionStatus']?.toString() ??
+          data['status']?.toString() ??
+          'CONNECTING';
+
+      openWaConnectedNumber = data['connectedNumber']?.toString() ?? '';
+
+      isOpenWaConnected =
+          openWaSessionStatus.toUpperCase() == 'CONNECTED' ||
+          data['connected'] == true;
+
+      update();
+      return true;
+    } catch (e, stackTrace) {
+      debugPrint('OPEN WA PHONE CONNECT ERROR: $e');
+      debugPrint('$stackTrace');
+
+      Get.snackbar(
+        'Connection failed',
+        'Something went wrong while starting phone pairing.',
+      );
+
+      return false;
+    } finally {
+      isOpenWaConnecting = false;
+      update();
+    }
+  }
+
+  // ============================================================
+  // ACTIVATE WHATSAPP SESSION AND POLL STATUS
+  //
+  // POST /profiles/{profileId}/openwa/activate
+  // GET  /profiles/{profileId}/openwa/status
+  // ============================================================
+
+  Future<bool> activateOpenWa() async {
+    final id = profileId;
+
+    if (id.isEmpty) {
+      Get.snackbar(
+        'Profile unavailable',
+        'Unable to find your business profile.',
+      );
+      return false;
+    }
+
+    if (isOpenWaActivating || isOpenWaPolling) {
+      return false;
+    }
+
+    isOpenWaActivating = true;
+    update();
+
+    try {
+      final endpoint = ApiConstants.openWaActivate(id);
+
+      final response = await _apiClient.post(
+        endpoint,
+        body: <String, dynamic>{},
+      );
+
+      if (!response.success) {
+        Get.snackbar(
+          'Activation failed',
+          'Could not activate the WhatsApp session.',
+        );
+        return false;
+      }
+
+      isOpenWaPolling = true;
+      update();
+
+      // Check immediately, then poll every 3 seconds.
+      for (var attempt = 0; attempt < 120 && isOpenWaPolling; attempt++) {
+        if (attempt > 0) {
+          await Future.delayed(const Duration(seconds: 3));
+        }
+
+        if (!isOpenWaPolling) break;
+
+        final connected = await fetchOpenWaStatus();
+
+        if (connected) {
+          isOpenWaPolling = false;
+          update();
+
+          Get.snackbar(
+            'WhatsApp connected',
+            'Your WhatsApp account is now connected.',
+          );
+
+          return true;
+        }
+      }
+
+      if (!isOpenWaConnected) {
+        Get.snackbar(
+          'Still waiting',
+          'WhatsApp is not connected yet. Refresh the status or try again.',
+        );
+      }
+
+      return isOpenWaConnected;
+    } catch (e, stackTrace) {
+      debugPrint('OPEN WA ACTIVATE ERROR: $e');
+      debugPrint('$stackTrace');
+
+      Get.snackbar(
+        'Activation failed',
+        'Could not activate the WhatsApp session.',
+      );
+
+      return false;
+    } finally {
+      isOpenWaActivating = false;
+      isOpenWaPolling = false;
+      update();
+    }
+  }
+
+  // ============================================================
+  // FETCH WHATSAPP STATUS
+  //
+  // GET /profiles/{profileId}/openwa/status
+  // ============================================================
+
+  Future<bool> fetchOpenWaStatus() async {
+    final id = profileId;
+
+    if (id.isEmpty) return false;
+
+    try {
+      final endpoint = ApiConstants.openWaStatus(id);
+      final response = await _apiClient.get(endpoint);
+
+      if (!response.success || response.data == null) {
+        return false;
+      }
+
+      final data = _openWaPayload(response.data);
+
+      openWaSessionStatus =
+          data['sessionStatus']?.toString() ??
+          data['status']?.toString() ??
+          openWaSessionStatus;
+
+      final qr = data['qrCode']?.toString() ?? '';
+
+      if (qr.isNotEmpty) {
+        openWaQrCode = qr;
+      }
+
+      final pairingCode = data['pairingCode']?.toString() ?? '';
+
+      if (pairingCode.isNotEmpty) {
+        openWaPairingCode = pairingCode;
+      }
+
+      final number = data['connectedNumber']?.toString() ?? '';
+
+      if (number.isNotEmpty) {
+        openWaConnectedNumber = number;
+      }
+
+      isOpenWaConnected =
+          openWaSessionStatus.toUpperCase() == 'CONNECTED' ||
+          data['connected'] == true;
+
+      if (isOpenWaConnected) {
+        isOpenWaPolling = false;
+      }
+
+      update();
+      return isOpenWaConnected;
+    } catch (e) {
+      debugPrint('OPEN WA STATUS ERROR: $e');
+      return false;
+    }
+  }
+
+  // ============================================================
+  // DEACTIVATE WHATSAPP SESSION
+  //
+  // POST /profiles/{profileId}/openwa/deactivate
+  // ============================================================
+
+  Future<bool> deactivateOpenWa() async {
+    final id = profileId;
+
+    if (id.isEmpty) {
+      Get.snackbar(
+        'Profile unavailable',
+        'Unable to find your business profile.',
+      );
+      return false;
+    }
+
+    isOpenWaPolling = false;
+    update();
+
+    try {
+      final endpoint = ApiConstants.openWaDeactivate(id);
+
+      final response = await _apiClient.post(
+        endpoint,
+        body: <String, dynamic>{},
+      );
+
+      if (!response.success) {
+        Get.snackbar(
+          'Disconnect failed',
+          'Could not disconnect WhatsApp. Please try again.',
+        );
+        return false;
+      }
+
+      isOpenWaConnected = false;
+      openWaQrCode = '';
+      openWaPairingCode = '';
+      openWaPhoneNumber = '';
+      openWaSessionStatus = 'DISCONNECTED';
+      openWaConnectedNumber = '';
+
+      update();
+
+      Get.snackbar(
+        'WhatsApp disconnected',
+        'Your WhatsApp session has been deactivated.',
+      );
+
+      return true;
+    } catch (e, stackTrace) {
+      debugPrint('OPEN WA DEACTIVATE ERROR: $e');
+      debugPrint('$stackTrace');
+
+      Get.snackbar(
+        'Disconnect failed',
+        'Something went wrong while disconnecting WhatsApp.',
+      );
+
+      return false;
+    }
+  }
+
+  // ============================================================
+  // GET CURRENT USER
   //
   // GET /auth/me
-  //
-  // This API is ONLY used to get the user information and profile ID.
-  //
-  // Profile ID comes from:
-  //
-  // userProfiles[0].profile.id
-  //
-  // ===========================================================================
+  // ============================================================
 
   Future<bool> getUserProfile() async {
     isLoading = true;
     update();
 
-    const endpoint = ApiConstants.me;
-
-    _debugRequest(
-      method: 'GET',
-      endpoint: endpoint,
-    );
-
     try {
+      final endpoint = ApiConstants.me;
+
+      _debugRequest(method: 'GET', endpoint: endpoint);
+
       final response = await _apiClient.get(endpoint);
 
       _debugResponse(
         method: 'GET',
         endpoint: endpoint,
-        response: response,
+        response: response.data,
       );
 
-      if (!response.success ||
-          response.data == null ||
-          response.data is! Map) {
-        debugPrint(
-          'AUTH/ME FAILED: Invalid response',
-        );
-
-        isLoading = false;
-        update();
-
+      if (!response.success || response.data == null || response.data is! Map) {
         return false;
       }
 
-      final data = Map<String, dynamic>.from(
-        response.data as Map,
-      );
+      final data = Map<String, dynamic>.from(response.data as Map);
 
-      // -----------------------------------------------------------------------
-      // Convert API response to model
-      // -----------------------------------------------------------------------
-
-      profileSettings =
-          ProfileSettingsModel.fromJson(data);
-
-      // -----------------------------------------------------------------------
-      // Validate userProfiles
-      // -----------------------------------------------------------------------
+      profileSettings = ProfileSettingsModel.fromJson(data);
 
       if (profileSettings!.userProfiles.isEmpty) {
-        debugPrint(
-          'AUTH/ME: No user profiles found',
-        );
-
-        isLoading = false;
-        update();
-
+        debugPrint('AUTH/ME: No user profiles found.');
         return false;
       }
-
-      // -----------------------------------------------------------------------
-      // Profile ID
-      // -----------------------------------------------------------------------
-
-      debugPrint('');
-      debugPrint('========== AUTH/ME PARSED ==========');
-      debugPrint(
-        'USER ID    : ${profileSettings!.id}',
-      );
-      debugPrint(
-        'EMAIL      : ${profileSettings!.email}',
-      );
-      debugPrint(
-        'ROLE       : ${profileSettings!.role}',
-      );
-      debugPrint(
-        'FULL NAME  : $fullName',
-      );
-      debugPrint(
-        'PROFILE ID : $profileId',
-      );
-      debugPrint('====================================');
-      debugPrint('');
-
-      isLoading = false;
-      update();
 
       return profileId.isNotEmpty;
     } catch (e, stackTrace) {
-      debugPrint(
-        'AUTH/ME EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('GET USER PROFILE ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isLoading = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
-  // GET SINGLE PROFILE
-  // ===========================================================================
+  // ============================================================
+  // GET PROFILE
   //
   // GET /profiles/{profileId}
-  //
-  // ===========================================================================
+  // ============================================================
 
   Future<bool> getProfile(String id) async {
     if (id.isEmpty) {
-      debugPrint(
-        'GET PROFILE: Profile ID is empty',
-      );
+      debugPrint('GET PROFILE: Profile ID is empty.');
       return false;
     }
 
     isLoading = true;
     update();
 
-    final endpoint = ApiConstants.profile(id);
-
-    _debugRequest(
-      method: 'GET',
-      endpoint: endpoint,
-    );
-
     try {
+      final endpoint = ApiConstants.profile(id);
+
+      _debugRequest(method: 'GET', endpoint: endpoint);
+
       final response = await _apiClient.get(endpoint);
 
       _debugResponse(
         method: 'GET',
         endpoint: endpoint,
-        response: response,
+        response: response.data,
       );
 
-      if (!response.success ||
-          response.data == null ||
-          response.data is! Map) {
-        debugPrint(
-          'GET PROFILE FAILED',
-        );
-
-        isLoading = false;
-        update();
-
+      if (!response.success || response.data == null || response.data is! Map) {
         return false;
       }
 
-      final data = Map<String, dynamic>.from(
-        response.data as Map,
-      );
-
-      // -----------------------------------------------------------------------
-      // Convert API response to ProfileModel
-      // -----------------------------------------------------------------------
+      final data = Map<String, dynamic>.from(response.data as Map);
 
       selectedProfile = ProfileModel.fromJson(data);
 
-      debugPrint('');
-      debugPrint('========== PROFILE PARSED ==========');
-      debugPrint(
-        'ID         : ${selectedProfile!.id}',
-      );
-      debugPrint(
-        'NAME       : ${selectedProfile!.name}',
-      );
-      debugPrint(
-        'SLUG       : ${selectedProfile!.slug}',
-      );
-      debugPrint(
-        'AUTO REPLY : ${selectedProfile!.autoReplyEnabled}',
-      );
-      debugPrint(
-        'WHATSAPP   : ${selectedProfile!.whatsappConfig != null}',
-      );
-      debugPrint(
-        'INSTAGRAM  : ${selectedProfile!.instagramConfig != null}',
-      );
-      debugPrint('====================================');
-      debugPrint('');
-
-      isLoading = false;
-      update();
-
       return true;
     } catch (e, stackTrace) {
-      debugPrint(
-        'GET PROFILE EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('GET PROFILE ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isLoading = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
-  // LOAD SETTINGS
-  // ===========================================================================
-  //
-  // STEP 1:
-  // GET /auth/me
-  //
-  // STEP 2:
-  // Extract profile ID from:
-  // userProfiles[0].profile.id
-  //
-  // STEP 3:
-  // GET /profiles/{profileId}
-  //
-  // ===========================================================================
+  // ============================================================
+  // LOAD USER AND PROFILE SETTINGS
+  // ============================================================
 
   Future<bool> loadSettings() async {
-    debugPrint('');
-    debugPrint('##########################################');
-    debugPrint('LOADING SETTINGS');
-    debugPrint('##########################################');
-
-    // -------------------------------------------------------------------------
-    // STEP 1 - GET /auth/me
-    // -------------------------------------------------------------------------
-
     final userSuccess = await getUserProfile();
 
     if (!userSuccess) {
-      debugPrint(
-        'SETTINGS: Failed to get user/profile ID',
-      );
-
+      debugPrint('SETTINGS: Failed to load user profile.');
       return false;
     }
-
-    // -------------------------------------------------------------------------
-    // STEP 2 - Get profile ID
-    // -------------------------------------------------------------------------
 
     final id = profileId;
 
-    debugPrint(
-      'SETTINGS: PROFILE ID = $id',
-    );
-
     if (id.isEmpty) {
-      debugPrint(
-        'SETTINGS: Profile ID is empty',
-      );
-
+      debugPrint('SETTINGS: Profile ID is empty.');
       return false;
     }
-
-    // -------------------------------------------------------------------------
-    // STEP 3 - GET /profiles/{profileId}
-    // -------------------------------------------------------------------------
 
     final profileSuccess = await getProfile(id);
 
     if (!profileSuccess) {
-      debugPrint(
-        'SETTINGS: Failed to load profile',
-      );
-
+      debugPrint('SETTINGS: Failed to load profile details.');
       return false;
     }
-
-    debugPrint(
-      'SETTINGS: Profile loaded successfully',
-    );
 
     return true;
   }
 
-  // ===========================================================================
+  // ============================================================
   // SELECT PROFILE
-  // ===========================================================================
+  // ============================================================
 
   void selectProfile(ProfileModel profile) {
     selectedProfile = profile;
     update();
   }
 
-  // ===========================================================================
+  // ============================================================
   // ADD PROFILE
-  // ===========================================================================
   //
   // POST /profiles
-  //
-  // ===========================================================================
+  // ============================================================
 
   Future<bool> addProfile({
     required String name,
@@ -512,90 +726,48 @@ class ProfileSettingsController extends GetxController {
     isSaving = true;
     update();
 
-    final endpoint = ApiConstants.addprofiles;
-
-    final body = {
-      'name': name,
-      'slug': slug,
-      'systemPrompt': systemPrompt,
-      'autoReplyEnabled': autoReplyEnabled,
-    };
-
-    _debugRequest(
-      method: 'POST',
-      endpoint: endpoint,
-      body: body,
-    );
-
     try {
-      final response = await _apiClient.post(
-        endpoint,
-        body: body,
-      );
+      final endpoint = ApiConstants.addprofiles;
 
-      _debugResponse(
-        method: 'POST',
-        endpoint: endpoint,
-        response: response,
-      );
+      final body = <String, dynamic>{
+        'name': name,
+        'slug': slug,
+        'systemPrompt': systemPrompt,
+        'autoReplyEnabled': autoReplyEnabled,
+      };
 
-      if (!response.success) {
-        isSaving = false;
-        update();
+      _debugRequest(method: 'POST', endpoint: endpoint, body: body);
 
-        return false;
-      }
+      final response = await _apiClient.post(endpoint, body: body);
 
-      // -----------------------------------------------------------------------
-      // Parse created profile if API returns it
-      // -----------------------------------------------------------------------
+      if (!response.success) return false;
 
-      if (response.data != null &&
-          response.data is Map) {
-        final data = Map<String, dynamic>.from(
-          response.data as Map,
-        );
-
+      if (response.data is Map) {
         try {
-          selectedProfile =
-              ProfileModel.fromJson(data);
-
-          debugPrint(
-            'CREATED PROFILE ID: ${selectedProfile!.id}',
+          selectedProfile = ProfileModel.fromJson(
+            Map<String, dynamic>.from(response.data as Map),
           );
         } catch (e) {
-          debugPrint(
-            'CREATE PROFILE PARSE ERROR: $e',
-          );
+          debugPrint('ADD PROFILE PARSE ERROR: $e');
         }
       }
 
-      isSaving = false;
-      update();
-
       return true;
     } catch (e, stackTrace) {
-      debugPrint(
-        'ADD PROFILE EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('ADD PROFILE ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isSaving = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
+  // ============================================================
   // UPDATE PROFILE
-  // ===========================================================================
   //
   // PATCH /profiles/{profileId}
-  //
-  // ===========================================================================
+  // ============================================================
 
   Future<bool> updateProfile({
     required String id,
@@ -603,152 +775,79 @@ class ProfileSettingsController extends GetxController {
     required String systemPrompt,
     required bool autoReplyEnabled,
   }) async {
-    if (id.isEmpty) {
-      debugPrint(
-        'UPDATE PROFILE: Profile ID is empty',
-      );
-      return false;
-    }
+    if (id.isEmpty) return false;
 
     isSaving = true;
     update();
 
-    final endpoint = ApiConstants.profile(id);
-
-    final body = {
-      'name': name,
-      'systemPrompt': systemPrompt,
-      'autoReplyEnabled': autoReplyEnabled,
-    };
-
-    _debugRequest(
-      method: 'PATCH',
-      endpoint: endpoint,
-      body: body,
-    );
-
     try {
-      final response = await _apiClient.patch(
-        endpoint,
-        body: body,
-      );
+      final endpoint = ApiConstants.profile(id);
 
-      _debugResponse(
-        method: 'PATCH',
-        endpoint: endpoint,
-        response: response,
-      );
+      final body = <String, dynamic>{
+        'name': name,
+        'systemPrompt': systemPrompt,
+        'autoReplyEnabled': autoReplyEnabled,
+      };
 
-      if (!response.success) {
-        isSaving = false;
-        update();
+      _debugRequest(method: 'PATCH', endpoint: endpoint, body: body);
 
-        return false;
-      }
+      final response = await _apiClient.patch(endpoint, body: body);
 
-      // -----------------------------------------------------------------------
-      // Refresh profile after update
-      // -----------------------------------------------------------------------
-
-      debugPrint(
-        'Refreshing profile after update...',
-      );
+      if (!response.success) return false;
 
       await getProfile(id);
-
-      isSaving = false;
-      update();
-
       return true;
     } catch (e, stackTrace) {
-      debugPrint(
-        'UPDATE PROFILE EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('UPDATE PROFILE ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isSaving = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
+  // ============================================================
   // DELETE PROFILE
-  // ===========================================================================
   //
   // DELETE /profiles/{profileId}
-  //
-  // ===========================================================================
+  // ============================================================
 
   Future<bool> deleteProfile(String id) async {
-    if (id.isEmpty) {
-      debugPrint(
-        'DELETE PROFILE: Profile ID is empty',
-      );
-      return false;
-    }
+    if (id.isEmpty) return false;
 
     isDeleting = true;
     update();
 
-    final endpoint = ApiConstants.profile(id);
-
-    _debugRequest(
-      method: 'DELETE',
-      endpoint: endpoint,
-    );
-
     try {
-      final response = await _apiClient.delete(
-        endpoint,
-      );
+      final endpoint = ApiConstants.profile(id);
 
-      _debugResponse(
-        method: 'DELETE',
-        endpoint: endpoint,
-        response: response,
-      );
+      _debugRequest(method: 'DELETE', endpoint: endpoint);
 
-      if (!response.success) {
-        isDeleting = false;
-        update();
+      final response = await _apiClient.delete(endpoint);
 
-        return false;
-      }
+      if (!response.success) return false;
 
       if (selectedProfile?.id == id) {
         selectedProfile = null;
       }
 
-      isDeleting = false;
-      update();
-
       return true;
     } catch (e, stackTrace) {
-      debugPrint(
-        'DELETE PROFILE EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('DELETE PROFILE ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isDeleting = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
-  // SAVE WHATSAPP CONFIG
-  // ===========================================================================
+  // ============================================================
+  // SAVE WHATSAPP CLOUD API CONFIGURATION
   //
-  // POST /profiles/{profileId}/whatsapp
-  //
-  // ===========================================================================
+  // PUT /profiles/{profileId}/whatsapp
+  // ============================================================
 
   Future<bool> saveWhatsappConfig({
     required String profileId,
@@ -759,82 +858,46 @@ class ProfileSettingsController extends GetxController {
     required String verifyToken,
     required bool enabled,
   }) async {
-    if (profileId.isEmpty) {
-      debugPrint(
-        'WHATSAPP: Profile ID is empty',
-      );
-      return false;
-    }
+    if (profileId.isEmpty) return false;
 
     isSaving = true;
     update();
 
-    final endpoint =
-        ApiConstants.whatsapp(profileId);
-
-    final body = {
-      'phoneNumberId': phoneNumberId,
-      'businessAccountId': businessAccountId,
-      'accessToken': accessToken,
-      'appSecret': appSecret,
-      'verifyToken': verifyToken,
-      'enabled': enabled,
-    };
-
-    _debugRequest(
-      method: 'POST',
-      endpoint: endpoint,
-      body: body,
-    );
-
     try {
-      final response = await _apiClient.post(
-        endpoint,
-        body: body,
-      );
+      final endpoint = ApiConstants.whatsapp(profileId);
 
-      _debugResponse(
-        method: 'POST',
-        endpoint: endpoint,
-        response: response,
-      );
+      final body = <String, dynamic>{
+        'phoneNumberId': phoneNumberId,
+        'businessAccountId': businessAccountId,
+        'accessToken': accessToken,
+        'appSecret': appSecret,
+        'verifyToken': verifyToken,
+        'enabled': enabled,
+      };
 
-      if (!response.success) {
-        isSaving = false;
-        update();
+      _debugRequest(method: 'PUT', endpoint: endpoint, body: body);
 
-        return false;
-      }
+      final response = await _apiClient.put(endpoint, body: body);
 
-      // Refresh profile
+      if (!response.success) return false;
+
       await getProfile(profileId);
-
-      isSaving = false;
-      update();
-
       return true;
     } catch (e, stackTrace) {
-      debugPrint(
-        'WHATSAPP EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('SAVE WHATSAPP CONFIG ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isSaving = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
-  // SAVE INSTAGRAM CONFIG
-  // ===========================================================================
+  // ============================================================
+  // SAVE INSTAGRAM CONFIGURATION
   //
-  // POST /profiles/{profileId}/instagram
-  //
-  // ===========================================================================
+  // PUT /profiles/{profileId}/instagram
+  // ============================================================
 
   Future<bool> saveInstagramConfig({
     required String profileId,
@@ -844,81 +907,61 @@ class ProfileSettingsController extends GetxController {
     required String verifyToken,
     required bool enabled,
   }) async {
-    if (profileId.isEmpty) {
-      debugPrint(
-        'INSTAGRAM: Profile ID is empty',
-      );
-      return false;
-    }
+    if (profileId.isEmpty) return false;
 
     isSaving = true;
     update();
 
-    final endpoint =
-        ApiConstants.instagram(profileId);
-
-    final body = {
-      'accountId': accountId,
-      'accessToken': accessToken,
-      'appSecret': appSecret,
-      'verifyToken': verifyToken,
-      'enabled': enabled,
-    };
-
-    _debugRequest(
-      method: 'POST',
-      endpoint: endpoint,
-      body: body,
-    );
-
     try {
-      final response = await _apiClient.post(
-        endpoint,
-        body: body,
-      );
+      final endpoint = ApiConstants.instagram(profileId);
 
-      _debugResponse(
-        method: 'POST',
-        endpoint: endpoint,
-        response: response,
-      );
+      final body = <String, dynamic>{
+        'accountId': accountId,
+        'accessToken': accessToken,
+        'appSecret': appSecret,
+        'verifyToken': verifyToken,
+        'enabled': enabled,
+      };
 
-      if (!response.success) {
-        isSaving = false;
-        update();
+      _debugRequest(method: 'PUT', endpoint: endpoint, body: body);
 
-        return false;
-      }
+      final response = await _apiClient.put(endpoint, body: body);
 
-      // Refresh profile
+      if (!response.success) return false;
+
       await getProfile(profileId);
-
-      isSaving = false;
-      update();
-
       return true;
     } catch (e, stackTrace) {
-      debugPrint(
-        'INSTAGRAM EXCEPTION: $e',
-      );
-      debugPrint(
-        '$stackTrace',
-      );
-
+      debugPrint('SAVE INSTAGRAM CONFIG ERROR: $e');
+      debugPrint('$stackTrace');
+      return false;
+    } finally {
       isSaving = false;
       update();
-
-      return false;
     }
   }
 
-  // ===========================================================================
+  bool _isControllerClosed = false;
+
+  void _safeUpdate() {
+    if (_isControllerClosed || isClosed) return;
+    update();
+  }
+
+  // ============================================================
   // DISPOSE
-  // ===========================================================================
+  // ============================================================
 
   @override
   void onClose() {
+    _isControllerClosed = true;
+
+    isOpenWaPolling = false;
+    isOpenWaConnecting = false;
+    isOpenWaActivating = false;
+
     _apiClient.dispose();
+
     super.onClose();
   }
 }

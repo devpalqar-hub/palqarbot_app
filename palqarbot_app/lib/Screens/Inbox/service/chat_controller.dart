@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 
 import 'package:palqarbot_app/Core/Constants/api_constants.dart';
 import 'package:palqarbot_app/Core/Network/api_client.dart';
-import 'package:palqarbot_app/Screens/Inbox/inbox_models.dart';
+import 'package:palqarbot_app/Screens/Inbox/model/inbox_models.dart';
 import 'package:palqarbot_app/Screens/Inbox/service/inbox_controller.dart';
 
 class ChatController extends GetxController {
@@ -82,7 +82,10 @@ class ChatController extends GetxController {
 
       // keep messages still waiting for the server so they don't blink away
       final pending = messages.where((m) => m.id.startsWith('local-')).toList();
-      final stillPending = pending.where((p) => !list.any((m) => m.text == p.text && m.sender != Sender.customer));
+      final stillPending = pending.where(
+        (p) =>
+            !list.any((m) => m.text == p.text && m.sender != Sender.customer),
+      );
       messages.value = [...list, ...stillPending];
     } finally {
       _busy = false;

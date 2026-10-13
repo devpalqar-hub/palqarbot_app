@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
 import 'package:palqarbot_app/Core/Theme/app_colors.dart';
@@ -19,113 +21,210 @@ class _BotScreenState extends State<BotScreen> {
 
   late final BotController _controller;
 
-  final TextEditingController _promptController = TextEditingController(
-    
-  );
+  final TextEditingController _promptController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
 
-    _controller = Get.put(BotController());
+    _controller = Get.isRegistered<BotController>()
+        ? Get.find<BotController>()
+        : Get.put(BotController());
 
     _promptController.addListener(_onTextChanged);
+
+    _loadPrompt();
   }
 
-  void _onTextChanged() {
+  // ===========================================================================
+  // LOAD EXISTING PROMPT
+  // ===========================================================================
+
+  Future<void> _loadPrompt() async {
+    final success = await _controller.loadSystemPrompt();
+
+    if (!mounted) return;
+
+    if (success) {
+      final prompt = _controller.systemPrompt;
+
+      _promptController.text = prompt;
+
+      _promptController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _promptController.text.length),
+      );
+    }
+
     setState(() {});
   }
 
-  @override
-  void dispose() {
-    _promptController.removeListener(_onTextChanged);
-    _promptController.dispose();
-    super.dispose();
+  // ===========================================================================
+  // TEXT CHANGE
+  // ===========================================================================
+
+  void _onTextChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
+
+  // ===========================================================================
+  // SAVE
+  // ===========================================================================
 
   Future<void> _savePrompt() async {
     FocusScope.of(context).unfocus();
 
     final prompt = _promptController.text.trim();
 
-    if (prompt.isEmpty) {
-      return;
-    }
+    if (prompt.isEmpty) return;
 
-    await _controller.updateSystemPrompt(prompt);
+    final success = await _controller.updateSystemPrompt(prompt);
+
+    if (!mounted) return;
+
+    if (success) {
+      _promptController.text = prompt;
+
+      _promptController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _promptController.text.length),
+      );
+    }
   }
+
+  // ===========================================================================
+  // DISPOSE
+  // ===========================================================================
+
+  @override
+  void dispose() {
+    _promptController.removeListener(_onTextChanged);
+    _promptController.dispose();
+
+    super.dispose();
+  }
+
+  // ===========================================================================
+  // BUILD
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
     return GetBuilder<BotController>(
       builder: (controller) {
         return Scaffold(
+          backgroundColor: AppColors.background,
           appBar: const AppTopBar(
             title: 'System Prompt',
-            subtitle:
-                'Define how the AI assistant should behave\n'
+            subtitle: 'Define how the AI assistant should behave\n'
                 'and respond.',
           ),
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: _buildPromptCard(
-                  _promptController.text.length,
-                  controller,
-                ),
-              ),
-            ),
+            child: controller.isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                : SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      20.w,
+                      18.h,
+                      20.w,
+                      24.h,
+                    ),
+                    child: _buildPromptContainer(controller),
+                  ),
           ),
         );
       },
     );
   }
 
-  // ============================================================
-  // PROMPT CARD
-  // ============================================================
+  // ===========================================================================
+  // MAIN CONTAINER
+  // ===========================================================================
 
-  Widget _buildPromptCard(int characterCount, BotController controller) {
+  Widget _buildPromptContainer(BotController controller) {
+    final characterCount = _promptController.text.length;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 17, 16, 19),
+      padding: EdgeInsets.fromLTRB(
+        18.w,
+        18.h,
+        18.w,
+        20.h,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(
+          color: AppColors.border,
+          width: 1.w,
+        ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // -------------------------------------------------------------------
+          // TITLE
+          // -------------------------------------------------------------------
+
           Text(
             'System Prompt',
             style: AppTextStyles.titleMedium.copyWith(
-              fontSize: 15,
+              fontSize: 16.sp,
               fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 10),
+
+          SizedBox(height: 5.h),
+
+          Text(
+            'Set the instructions that guide how your AI assistant '
+            'responds to customers.',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontSize: 12.sp,
+              height: 1.4,
+              color: AppColors.textSecondary,
+            ),
+          ),
+
+          SizedBox(height: 16.h),
+
+          // -------------------------------------------------------------------
+          // PROMPT FIELD
+          // -------------------------------------------------------------------
+
           _buildPromptField(characterCount),
-          const SizedBox(height: 18),
+
+          SizedBox(height: 18.h),
+
+          // -------------------------------------------------------------------
+          // SAVE BUTTON
+          // -------------------------------------------------------------------
+
           _buildSaveButton(controller),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // TEXT FIELD
-  // ============================================================
+  // ===========================================================================
+  // PROMPT FIELD
+  // ===========================================================================
 
   Widget _buildPromptField(int characterCount) {
     return Container(
-      height: 320,
+      width: double.infinity,
+      height: 320.h,
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border, width: 1),
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: AppColors.border,
+          width: 1.w,
+        ),
       ),
       child: Stack(
         children: [
@@ -135,30 +234,60 @@ class _BotScreenState extends State<BotScreen> {
             maxLines: null,
             expands: true,
             textAlignVertical: TextAlignVertical.top,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
             style: AppTextStyles.body.copyWith(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-              height: 1.4,
+              fontSize: 14.sp,
+              height: 1.5,
+              color: AppColors.textPrimary,
             ),
             decoration: InputDecoration(
-              hintText: 'Enter system prompt...',
-              hintStyle: AppTextStyles.bodySmall,
+              hintText: 'Enter system prompt...\n\n'
+                  'Example:\n'
+                  'You are a helpful customer support assistant. '
+                  'Answer clearly, politely, and professionally.',
+              hintStyle: AppTextStyles.bodySmall.copyWith(
+                fontSize: 13.sp,
+                height: 1.5,
+                color: AppColors.textSecondary,
+              ),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
               filled: false,
-              contentPadding: const EdgeInsets.fromLTRB(12, 11, 12, 34),
+              contentPadding: EdgeInsets.fromLTRB(
+                14.w,
+                14.h,
+                14.w,
+                38.h,
+              ),
               counterText: '',
             ),
           ),
+
+          // -------------------------------------------------------------------
+          // CHARACTER COUNT
+          // -------------------------------------------------------------------
+
           Positioned(
-            right: 10,
-            bottom: 9,
-            child: Text(
-              '$characterCount/$maxCharacters',
-              style: AppTextStyles.caption.copyWith(
-                fontSize: 11,
-                color: AppColors.textSecondary,
+            right: 12.w,
+            bottom: 10.h,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 7.w,
+                vertical: 3.h,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(5.r),
+              ),
+              child: Text(
+                '$characterCount/$maxCharacters',
+                style: AppTextStyles.caption.copyWith(
+                  fontSize: 10.sp,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -167,14 +296,18 @@ class _BotScreenState extends State<BotScreen> {
     );
   }
 
-  // ============================================================
+  // ===========================================================================
   // SAVE BUTTON
-  // ============================================================
-Widget _buildSaveButton(BotController controller) {
-  return AppButton(
-    text: 'Save',
-    isLoading: controller.isSaving,
-    onPressed: _savePrompt,
-  );
-}
+  // ===========================================================================
+
+  Widget _buildSaveButton(BotController controller) {
+    return SizedBox(
+      width: double.infinity,
+      child: AppButton(
+        text: 'Save',
+        isLoading: controller.isSaving,
+        onPressed: _savePrompt,
+      ),
+    );
+  }
 }

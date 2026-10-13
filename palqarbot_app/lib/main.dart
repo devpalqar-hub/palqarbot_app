@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
 import 'package:palqarbot_app/Core/Theme/app_colors.dart';
@@ -15,14 +17,12 @@ import 'package:palqarbot_app/Screens/leads/LeadsScreen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  Get.put(
+  Get.put<AuthController>(
     AuthController(),
     permanent: true,
   );
 
-  runApp(
-    const PalqarbotApp(),
-  );
+  runApp(const PalqarbotApp());
 }
 
 class PalqarbotApp extends StatelessWidget {
@@ -30,41 +30,33 @@ class PalqarbotApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
-      title: 'Palqarbot',
-
-      debugShowCheckedModeBanner: false,
-
-      theme: AppTheme.light,
-
-      // ========================================================
-      // GETX ROUTES
-      // ========================================================
-
-      getPages: [
-        GetPage(
-          name: '/login',
-          page: () => const LoginScreen(),
-        ),
-
-        GetPage(
-          name: '/home',
-          page: () => const HomeScreen(),
-        ),
-      ],
-
-      // ========================================================
-      // INITIAL AUTH CHECK
-      // ========================================================
-
-      home: const AuthGate(),
+    return ScreenUtilInit(
+      designSize: const Size(390, 844),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      builder: (context, child) {
+        return GetMaterialApp(
+          title: 'Palqarbot',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          getPages: [
+            GetPage(
+              name: '/login',
+              page: () => const LoginScreen(),
+            ),
+            GetPage(
+              name: '/bottombar',
+              page: () => const Bottombar(),
+            ),
+          ],
+          home: const AuthGate(),
+        );
+      },
     );
   }
 }
 
-// ============================================================
-// AUTH GATE
-// ============================================================
+// AUTH GATE + SPLASH SCREEN
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -74,51 +66,36 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late final AuthController _authController;
-
   late final Future<bool> _authenticationFuture;
 
   @override
   void initState() {
     super.initState();
 
-    _authController = Get.find<AuthController>();
-
-    // Run authentication check only once.
     _authenticationFuture =
-        _authController.isLoggedIn();
+        Get.find<AuthController>().isLoggedIn();
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
       future: _authenticationFuture,
-
       builder: (context, snapshot) {
-        // ======================================================
-        // LOADING
-        // ======================================================
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashScreen();
+        }
 
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+        if (snapshot.hasError) {
           return const Scaffold(
             body: Center(
-              child: CircularProgressIndicator(),
+              child: Text('Unable to check login status.'),
             ),
           );
         }
 
-        // ======================================================
-        // AUTHENTICATED
-        // ======================================================
-
         if (snapshot.data == true) {
-          return const HomeScreen();
+          return const Bottombar();
         }
-
-        // ======================================================
-        // NOT AUTHENTICATED
-        // ======================================================
 
         return const LoginScreen();
       },
@@ -126,39 +103,150 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-// ============================================================
-// HOME SCREEN
-// ============================================================
+// SPLASH SCREEN
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: SizedBox.expand(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Robot illustration
+              Container(
+                width: 190.w,
+                height: 190.w,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(40.r),
+                  border: Border.all(
+                    color: AppColors.border,
+                    width: 1,
+                  ),
+                ),
+                padding: EdgeInsets.all(15.w),
+                child: Image.asset(
+                  'assets/robo.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.smart_toy_rounded,
+                      size: 100.sp,
+                      color: AppColors.primary,
+                    );
+                  },
+                ),
+              ),
+
+              SizedBox(height: 28.h),
+
+              // App name
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Palqar',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 34.sp,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.sp,
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'bot',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 34.sp,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.sp,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 10.h),
+
+              // Tagline
+              Text(
+                'Your AI Assistant for Business',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              SizedBox(height: 38.h),
+
+              // Loading indicator
+              SizedBox(
+                width: 28.w,
+                height: 28.w,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+// BOTTOM NAVIGATION
+
+class Bottombar extends StatefulWidget {
+  const Bottombar({super.key});
+
+  @override
+  State<Bottombar> createState() => _BottombarState();
+}
+
+class _BottombarState extends State<Bottombar> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _screens = [
-    InboxScreen(),
-    LeadsScreen(),
-    BotScreen(),
-    SettingsScreen(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _screens = [
+      const InboxScreen(),
+      const LeadsScreen(),
+      const BotScreen(),
+      const SettingsScreen(),
+    ];
+  }
+
+  void _navigateToTab(int index) {
+    if (index < 0 || index >= _screens.length) return;
+
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         top: false,
-
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: 820,
             ),
-
             child: IndexedStack(
               index: _selectedIndex,
               children: _screens,
@@ -166,138 +254,64 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-
-      // ========================================================
-      // BOTTOM NAVIGATION
-      // ========================================================
-
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
-          indicatorColor:
-              AppColors.primaryLight,
-
-          // ====================================================
-          // LABEL STYLE
-          // ====================================================
-
+          indicatorColor: AppColors.primaryLight,
           labelTextStyle:
-              WidgetStateProperty.resolveWith(
+              WidgetStateProperty.resolveWith<TextStyle>(
             (states) {
               final selected =
-                  states.contains(
-                WidgetState.selected,
-              );
+                  states.contains(WidgetState.selected);
 
               return TextStyle(
                 color: selected
                     ? AppColors.primary
                     : Colors.grey,
-
                 fontWeight: selected
                     ? FontWeight.w600
                     : FontWeight.w500,
               );
             },
           ),
-
-          // ====================================================
-          // ICON STYLE
-          // ====================================================
-
           iconTheme:
-              WidgetStateProperty.resolveWith(
+              WidgetStateProperty.resolveWith<IconThemeData>(
             (states) {
               final selected =
-                  states.contains(
-                WidgetState.selected,
-              );
+                  states.contains(WidgetState.selected);
 
               return IconThemeData(
                 color: selected
                     ? AppColors.primary
                     : Colors.grey,
-
                 size: 24,
               );
             },
           ),
         ),
-
         child: NavigationBar(
           selectedIndex: _selectedIndex,
-
           labelBehavior:
-              NavigationDestinationLabelBehavior
-                  .alwaysShow,
-
-          onDestinationSelected: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-
+              NavigationDestinationLabelBehavior.alwaysShow,
+          onDestinationSelected: _navigateToTab,
           destinations: const [
-            // ==================================================
-            // INBOX
-            // ==================================================
-
             NavigationDestination(
-              icon: Icon(
-                Icons.inbox_outlined,
-              ),
-
-              selectedIcon: Icon(
-                Icons.inbox_rounded,
-              ),
-
+              icon: Icon(Icons.inbox_outlined),
+              selectedIcon: Icon(Icons.inbox_rounded),
               label: 'Inbox',
             ),
-
-            // ==================================================
-            // LEADS
-            // ==================================================
-
             NavigationDestination(
-              icon: Icon(
-                Icons.people_outline_rounded,
-              ),
-
-              selectedIcon: Icon(
-                Icons.people_rounded,
-              ),
-
+              icon: Icon(Icons.people_outline_rounded),
+              selectedIcon: Icon(Icons.people_rounded),
               label: 'Leads',
             ),
-
-            // ==================================================
-            // BOT
-            // ==================================================
-
             NavigationDestination(
-              icon: Icon(
-                Icons.auto_awesome_outlined,
-              ),
-
-              selectedIcon: Icon(
-                Icons.auto_awesome_rounded,
-              ),
-
+              icon: Icon(Icons.auto_awesome_outlined),
+              selectedIcon: Icon(Icons.auto_awesome_rounded),
               label: 'Bot',
             ),
-
-            // ==================================================
-            // SETTINGS
-            // ==================================================
-
             NavigationDestination(
-              icon: Icon(
-                Icons.settings_outlined,
-              ),
-
-              selectedIcon: Icon(
-                Icons.settings_rounded,
-              ),
-
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings_rounded),
               label: 'Settings',
             ),
           ],

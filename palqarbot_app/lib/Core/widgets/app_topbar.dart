@@ -27,7 +27,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
  @override
-  Size get preferredSize => const Size.fromHeight(65);
+  Size get preferredSize => const Size.fromHeight(80);
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +36,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
       color: AppColors.background,
       padding: const EdgeInsets.fromLTRB(
         20,
-        55,
+        70,
         20,
         0,
       ),

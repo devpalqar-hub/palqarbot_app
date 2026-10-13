@@ -47,4 +47,23 @@ class ApiConstants {
 
   static String inboxAi(String profileId, String conversationId) =>
       '${inboxConversations(profileId)}/$conversationId/ai';
+
+  static const String profileOnboarding =
+    '$baseUrl/profile-onboarding';
+
+static String profileOnboardingAnswer(String requestId) =>
+    '$profileOnboarding/$requestId/answer';
+static String openWaConnect(String profileId) =>
+    '${profile(profileId)}/connect';
+
+static String openWaActivate(String profileId) =>
+    '${profile(profileId)}/openwa/activate';
+
+static String openWaStatus(String profileId) =>
+    '${profile(profileId)}/openwa/status';
+
+static String openWaDeactivate(String profileId) =>
+    '${profile(profileId)}/openwa/deactivate';
+static const String openWaConnectPhone =
+    '$baseUrl/openwa/connect/phone';
 }

@@ -13,6 +13,49 @@ class ChatTag {
   const ChatTag(this.label, this.color, this.background);
 }
 
+/// ============================================================
+/// MESSAGE ATTACHMENT
+/// ============================================================
+
+class ChatAttachment {
+  final String url;
+  final String type;
+  final String? mimeType;
+  final String? transcript;
+
+  const ChatAttachment({
+    required this.url,
+    required this.type,
+    this.mimeType,
+    this.transcript,
+  });
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> json) {
+    return ChatAttachment(
+      url: _str(json['url']) ?? '',
+      type: _str(json['type'])?.toLowerCase() ?? 'file',
+      mimeType: _str(json['mimeType'])?.toLowerCase(),
+      transcript: _str(json['transcript']),
+    );
+  }
+
+  bool get isImage {
+    return type == 'image' || mimeType?.startsWith('image/') == true;
+  }
+
+  bool get isAudio {
+    return type == 'audio' || mimeType?.startsWith('audio/') == true;
+  }
+
+  bool get isVideo {
+    return type == 'video' || mimeType?.startsWith('video/') == true;
+  }
+}
+
+/// ============================================================
+/// CHAT MESSAGE
+/// ============================================================
+
 class ChatMessage {
   final String id;
   final String text;
@@ -20,40 +63,95 @@ class ChatMessage {
   final Sender sender;
   final bool failed;
 
+  /// NEW
+  final List<ChatAttachment> attachments;
+
   const ChatMessage({
     required this.id,
     required this.text,
     required this.createdAt,
     required this.sender,
     this.failed = false,
+    this.attachments = const [],
   });
 
   String get time => formatClock(createdAt);
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final rawAttachments = json['attachments'];
+
+    final attachments = <ChatAttachment>[];
+
+    if (rawAttachments is List) {
+      for (final item in rawAttachments) {
+        if (item is Map) {
+          final attachment = ChatAttachment.fromJson(
+            Map<String, dynamic>.from(item),
+          );
+
+          if (attachment.url.isNotEmpty) {
+            attachments.add(attachment);
+          }
+        }
+      }
+    }
+
     return ChatMessage(
       id: _str(json['id']) ?? '',
       text: _str(_pick(json, ['content', 'text', 'body', 'message'])) ?? '',
       createdAt: _date(_pick(json, ['createdAt', 'timestamp', 'sentAt'])),
       sender: _sender(json),
       failed: (_str(json['status']) ?? '').toUpperCase() == 'FAILED',
+
+      /// NEW
+      attachments: attachments,
     );
   }
 
   static Sender _sender(Map<String, dynamic> json) {
-    final who = (_str(_pick(json, ['sender', 'senderType', 'role', 'from', 'author'])) ?? '').toLowerCase();
+    final who =
+        (_str(
+                  _pick(json, [
+                    'sender',
+                    'senderType',
+                    'role',
+                    'from',
+                    'author',
+                  ]),
+                ) ??
+                '')
+            .toLowerCase();
+
     final direction = (_str(json['direction']) ?? '').toLowerCase();
 
-    if (['user', 'customer', 'contact', 'inbound', 'incoming'].any(who.contains)) {
+    if ([
+      'user',
+      'customer',
+      'contact',
+      'inbound',
+      'incoming',
+    ].any(who.contains)) {
       return Sender.customer;
     }
-    if (['ai', 'bot', 'assistant', 'system'].any(who.contains)) return Sender.bot;
-    if (['human', 'agent', 'admin', 'staff', 'manual'].any(who.contains)) return Sender.agent;
 
-    if (direction.contains('in')) return Sender.customer;
-    if (json['isAi'] == true || json['aiGenerated'] == true || json['isBot'] == true) {
+    if (['ai', 'bot', 'assistant', 'system'].any(who.contains)) {
       return Sender.bot;
     }
+
+    if (['human', 'agent', 'admin', 'staff', 'manual'].any(who.contains)) {
+      return Sender.agent;
+    }
+
+    if (direction.contains('in')) {
+      return Sender.customer;
+    }
+
+    if (json['isAi'] == true ||
+        json['aiGenerated'] == true ||
+        json['isBot'] == true) {
+      return Sender.bot;
+    }
+
     return Sender.agent;
   }
 }
@@ -83,14 +181,22 @@ class Conversation {
 
   List<ChatTag> get tags {
     final list = <ChatTag>[];
-    if (leadStatus != null && leadStatus!.isNotEmpty) list.add(_leadTag(leadStatus!));
+    if (leadStatus != null && leadStatus!.isNotEmpty)
+      list.add(_leadTag(leadStatus!));
     if (!aiEnabled) {
-      list.add(const ChatTag('Manual', AppColors.warning, AppColors.warningLight));
+      list.add(
+        const ChatTag('Manual', AppColors.warning, AppColors.warningLight),
+      );
     }
     return list;
   }
 
-  Conversation copyWith({bool? aiEnabled, int? unread, String? lastMessage, DateTime? lastAt}) {
+  Conversation copyWith({
+    bool? aiEnabled,
+    int? unread,
+    String? lastMessage,
+    DateTime? lastAt,
+  }) {
     return Conversation(
       id: id,
       name: name,
@@ -104,25 +210,53 @@ class Conversation {
   }
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
-    final contact = _map(json['contact']) ?? _map(json['customer']) ?? const <String, dynamic>{};
+    final contact =
+        _map(json['contact']) ??
+        _map(json['customer']) ??
+        const <String, dynamic>{};
     final lead = _map(json['lead']) ?? const <String, dynamic>{};
 
-    final name = _str(_pick(contact, ['name', 'displayName', 'fullName', 'username', 'waId', 'phone'])) ??
-        _str(_pick(json, ['name', 'contactName', 'customerName', 'username', 'phone'])) ??
+    final name =
+        _str(
+          _pick(contact, [
+            'name',
+            'displayName',
+            'fullName',
+            'username',
+            'waId',
+            'phone',
+          ]),
+        ) ??
+        _str(
+          _pick(json, [
+            'name',
+            'contactName',
+            'customerName',
+            'username',
+            'phone',
+          ]),
+        ) ??
         'Unknown';
 
     final shownName = RegExp(r'^\d{8,}$').hasMatch(name) ? '+$name' : name;
 
     String last = '';
     DateTime? lastAt;
-    final lastRaw = _pick(json, ['lastMessage', 'latestMessage', 'lastMessagePreview', 'preview', 'lastMessageContent']);
+    final lastRaw = _pick(json, [
+      'lastMessage',
+      'latestMessage',
+      'lastMessagePreview',
+      'preview',
+      'lastMessageContent',
+    ]);
     if (lastRaw is Map) {
       final m = Map<String, dynamic>.from(lastRaw);
       last = _str(_pick(m, ['content', 'text', 'body', 'message'])) ?? '';
       lastAt = _date(_pick(m, ['createdAt', 'timestamp']));
     } else if (lastRaw != null) {
       last = _str(lastRaw) ?? '';
-    } else if (json['messages'] is List && (json['messages'] as List).isNotEmpty) {
+    } else if (json['messages'] is List &&
+        (json['messages'] as List).isNotEmpty) {
       final first = (json['messages'] as List).first;
       if (first is Map) {
         final m = Map<String, dynamic>.from(first);
@@ -146,7 +280,9 @@ class Conversation {
           : Channel.whatsapp,
       unread: _int(_pick(json, ['unreadCount', 'unread'])),
       aiEnabled: aiEnabled,
-      leadStatus: _str(_pick(lead, ['status', 'stage'])) ?? _str(_pick(json, ['leadStatus', 'stage'])),
+      leadStatus:
+          _str(_pick(lead, ['status', 'stage'])) ??
+          _str(_pick(json, ['leadStatus', 'stage'])),
     );
   }
 }
@@ -154,7 +290,13 @@ class Conversation {
 List<dynamic> extractList(dynamic data) {
   if (data is List) return data;
   if (data is Map) {
-    for (final key in ['data', 'items', 'conversations', 'messages', 'results']) {
+    for (final key in [
+      'data',
+      'items',
+      'conversations',
+      'messages',
+      'results',
+    ]) {
       final v = data[key];
       if (v is List) return v;
       if (v is Map) {
@@ -192,12 +334,17 @@ ChatTag _leadTag(String status) {
       .join(' ');
   final s = status.toLowerCase();
 
-  if (s.contains('new')) return ChatTag(label, AppColors.primary, AppColors.primaryLight);
+  if (s.contains('new'))
+    return ChatTag(label, AppColors.primary, AppColors.primaryLight);
   if (s.contains('follow') || s.contains('lost')) {
     return ChatTag(label, AppColors.error, AppColors.errorLight);
   }
-  if (s.contains('contact')) return ChatTag(label, AppColors.warning, AppColors.warningLight);
-  if (s.contains('interest') || s.contains('qualif') || s.contains('convert') || s.contains('won')) {
+  if (s.contains('contact'))
+    return ChatTag(label, AppColors.warning, AppColors.warningLight);
+  if (s.contains('interest') ||
+      s.contains('qualif') ||
+      s.contains('convert') ||
+      s.contains('won')) {
     return ChatTag(label, AppColors.success, AppColors.successLight);
   }
   return ChatTag(label, AppColors.textSecondary, AppColors.surfaceSecondary);
@@ -210,7 +357,8 @@ dynamic _pick(Map<String, dynamic> json, List<String> keys) {
   return null;
 }
 
-Map<String, dynamic>? _map(dynamic v) => v is Map ? Map<String, dynamic>.from(v) : null;
+Map<String, dynamic>? _map(dynamic v) =>
+    v is Map ? Map<String, dynamic>.from(v) : null;
 
 String? _str(dynamic v) {
   if (v == null) return null;
@@ -223,4 +371,5 @@ int _int(dynamic v) {
   return int.tryParse(v?.toString() ?? '') ?? 0;
 }
 
-DateTime? _date(dynamic v) => v == null ? null : DateTime.tryParse(v.toString());
+DateTime? _date(dynamic v) =>
+    v == null ? null : DateTime.tryParse(v.toString());

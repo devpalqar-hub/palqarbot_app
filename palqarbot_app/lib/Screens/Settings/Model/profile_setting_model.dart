@@ -1,4 +1,3 @@
-
 class ProfileSettingsModel {
   final String id;
   final String email;
@@ -22,9 +21,7 @@ class ProfileSettingsModel {
     required this.userProfiles,
   });
 
-  factory ProfileSettingsModel.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory ProfileSettingsModel.fromJson(Map<String, dynamic> json) {
     return ProfileSettingsModel(
       id: json['id']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
@@ -36,39 +33,44 @@ class ProfileSettingsModel {
       createdAt: json['createdAt']?.toString(),
       userProfiles:
           (json['userProfiles'] as List<dynamic>?)
-                  ?.map(
-                    (item) => UserProfileModel.fromJson(
-                      Map<String, dynamic>.from(item),
-                    ),
-                  )
-                  .toList() ??
-              [],
+              ?.whereType<Map>()
+              .map(
+                (item) =>
+                    UserProfileModel.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList() ??
+          [],
     );
   }
 }
+
+// ============================================================
+// USER PROFILE
+// ============================================================
 
 class UserProfileModel {
   final bool isOwner;
   final ProfileModel profile;
 
-  UserProfileModel({
-    required this.isOwner,
-    required this.profile,
-  });
+  UserProfileModel({required this.isOwner, required this.profile});
 
-  factory UserProfileModel.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory UserProfileModel.fromJson(Map<String, dynamic> json) {
+    final profileJson = json['profile'];
+
     return UserProfileModel(
       isOwner: json['isOwner'] == true,
       profile: ProfileModel.fromJson(
-        Map<String, dynamic>.from(
-          json['profile'] ?? {},
-        ),
+        profileJson is Map
+            ? Map<String, dynamic>.from(profileJson)
+            : <String, dynamic>{},
       ),
     );
   }
 }
+
+// ============================================================
+// PROFILE
+// ============================================================
 
 class ProfileModel {
   final String id;
@@ -76,7 +78,11 @@ class ProfileModel {
   final String slug;
   final String systemPrompt;
   final bool autoReplyEnabled;
+  final String? createdAt;
+  final String? whatsappProvider;
+
   final WhatsAppConfigModel? whatsappConfig;
+  final OpenWaConfigModel? openWaConfig;
   final InstagramConfigModel? instagramConfig;
 
   ProfileModel({
@@ -85,48 +91,52 @@ class ProfileModel {
     required this.slug,
     required this.systemPrompt,
     required this.autoReplyEnabled,
+    this.createdAt,
+    this.whatsappProvider,
     this.whatsappConfig,
+    this.openWaConfig,
     this.instagramConfig,
   });
 
-  factory ProfileModel.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       slug: json['slug']?.toString() ?? '',
-      systemPrompt:
-          json['systemPrompt']?.toString() ?? '',
-      autoReplyEnabled:
-          json['autoReplyEnabled'] == true,
+      systemPrompt: json['systemPrompt']?.toString() ?? '',
+      autoReplyEnabled: json['autoReplyEnabled'] == true,
+      createdAt: json['createdAt']?.toString(),
+      whatsappProvider: json['whatsappProvider']?.toString(),
 
-      whatsappConfig:
-          json['whatsappConfig'] is Map
-              ? WhatsAppConfigModel.fromJson(
-                  Map<String, dynamic>.from(
-                    json['whatsappConfig'],
-                  ),
-                )
-              : null,
+      whatsappConfig: json['whatsappConfig'] is Map
+          ? WhatsAppConfigModel.fromJson(
+              Map<String, dynamic>.from(json['whatsappConfig']),
+            )
+          : null,
 
-      instagramConfig:
-          json['instagramConfig'] is Map
-              ? InstagramConfigModel.fromJson(
-                  Map<String, dynamic>.from(
-                    json['instagramConfig'],
-                  ),
-                )
-              : null,
+      openWaConfig: json['openWaConfig'] is Map
+          ? OpenWaConfigModel.fromJson(
+              Map<String, dynamic>.from(json['openWaConfig']),
+            )
+          : null,
+
+      instagramConfig: json['instagramConfig'] is Map
+          ? InstagramConfigModel.fromJson(
+              Map<String, dynamic>.from(json['instagramConfig']),
+            )
+          : null,
     );
   }
 }
+
+// ============================================================
+// WHATSAPP CONFIG
+// ============================================================
 
 class WhatsAppConfigModel {
   final String? id;
   final String phoneNumberId;
   final String businessAccountId;
-  
   final bool enabled;
 
   WhatsAppConfigModel({
@@ -136,19 +146,43 @@ class WhatsAppConfigModel {
     required this.enabled,
   });
 
-  factory WhatsAppConfigModel.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory WhatsAppConfigModel.fromJson(Map<String, dynamic> json) {
     return WhatsAppConfigModel(
       id: json['id']?.toString(),
-      phoneNumberId:
-          json['phoneNumberId']?.toString() ?? '',
-      businessAccountId:
-          json['businessAccountId']?.toString() ?? '',
+      phoneNumberId: json['phoneNumberId']?.toString() ?? '',
+      businessAccountId: json['businessAccountId']?.toString() ?? '',
       enabled: json['enabled'] == true,
     );
   }
 }
+
+// ============================================================
+// OPEN WA CONFIG
+// ============================================================
+
+class OpenWaConfigModel {
+  final String? sessionStatus;
+  final String? connectedNumber;
+  final bool enabled;
+
+  OpenWaConfigModel({
+    this.sessionStatus,
+    this.connectedNumber,
+    required this.enabled,
+  });
+
+  factory OpenWaConfigModel.fromJson(Map<String, dynamic> json) {
+    return OpenWaConfigModel(
+      sessionStatus: json['sessionStatus']?.toString(),
+      connectedNumber: json['connectedNumber']?.toString(),
+      enabled: json['enabled'] == true,
+    );
+  }
+}
+
+// ============================================================
+// INSTAGRAM CONFIG
+// ============================================================
 
 class InstagramConfigModel {
   final String? id;
@@ -161,13 +195,10 @@ class InstagramConfigModel {
     required this.enabled,
   });
 
-  factory InstagramConfigModel.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory InstagramConfigModel.fromJson(Map<String, dynamic> json) {
     return InstagramConfigModel(
       id: json['id']?.toString(),
-      accountId:
-          json['accountId']?.toString() ?? '',
+      accountId: json['accountId']?.toString() ?? '',
       enabled: json['enabled'] == true,
     );
   }
