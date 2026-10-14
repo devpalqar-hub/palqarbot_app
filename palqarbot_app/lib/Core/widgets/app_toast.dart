@@ -1,20 +1,21 @@
-
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
 class AppToast {
   AppToast._();
 
-  static void showToast(String message) {
+  static void showToast(
+    String message, {
+    bool isSuccess = false,
+  }) {
     Fluttertoast.showToast(
       msg: message,
-      toastLength: Toast.LENGTH_LONG,
+      toastLength: Toast.LENGTH_SHORT,
       gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 3,
-      backgroundColor: const Color(0xFF17213D),
+      timeInSecForIosWeb: 2,
+      backgroundColor: Colors.black,
       textColor: Colors.white,
-      fontSize: 14.sp,
+      fontSize: 13.0,
     );
   }
 }

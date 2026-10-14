@@ -6,6 +6,8 @@ import 'package:get/get.dart';
 import 'package:palqarbot_app/Core/Theme/app_colors.dart';
 import 'package:palqarbot_app/Screens/Auth/Service/auth_controller.dart';
 import 'package:palqarbot_app/Screens/Auth/register_screen.dart';
+import 'package:palqarbot_app/Screens/Onboarding/Views/buisness_descriptionscreen.dart';
+import 'package:palqarbot_app/Screens/Settings/service/profile_setting_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,39 +45,70 @@ class _LoginScreenState extends State<LoginScreen> {
   // LOGIN
   // ===========================================================================
 
-  Future<void> _login() async {
-    FocusScope.of(context).unfocus();
+Future<void> _login() async {
+  FocusScope.of(context).unfocus();
 
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
+  final email = _emailController.text.trim();
+  final password = _passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      _message(
-        'Required fields',
-        'Please enter your email and password.',
-      );
-      return;
-    }
-
-    if (!GetUtils.isEmail(email)) {
-      _message(
-        'Invalid email',
-        'Please enter a valid email address.',
-      );
-      return;
-    }
-
-    final success = await _controller.login(
-      email: email,
-      password: password,
+  if (email.isEmpty || password.isEmpty) {
+    _message(
+      'Required fields',
+      'Please enter your email and password.',
     );
+    return;
+  }
+
+  if (!GetUtils.isEmail(email)) {
+    _message(
+      'Invalid email',
+      'Please enter a valid email address.',
+    );
+    return;
+  }
+
+  final success = await _controller.login(
+    email: email,
+    password: password,
+  );
+
+  if (!mounted) return;
+
+  if (!success) return;
+
+  try {
+    final profileController =
+        Get.isRegistered<ProfileSettingsController>()
+            ? Get.find<ProfileSettingsController>()
+            : Get.put(ProfileSettingsController());
+
+    final hasProfile = await profileController.getUserProfile();
 
     if (!mounted) return;
 
-    if (success) {
+    if (hasProfile) {
       Get.offAllNamed('/bottombar');
+    } else if (profileController.profileSettings != null) {
+      // The user data loaded successfully, but no business
+      // profile exists.
+      Get.offAll(
+        () => const BusinessDescriptionScreen(),
+      );
+    } else {
+      // The profile API failed; don't assume onboarding is needed.
+      _message(
+        'Profile check failed',
+        'Unable to check your business profile. Please try again.',
+      );
     }
+  } catch (e) {
+    _message(
+      'Profile check failed',
+      'Unable to check your business profile. Please try again.',
+    );
   }
+}
+
 
   // ===========================================================================
   // MESSAGE

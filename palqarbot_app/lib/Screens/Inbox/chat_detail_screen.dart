@@ -248,71 +248,75 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
           SizedBox(height: 12.h),
 
-          // Messages
-          Expanded(
-            child: Obx(() {
-              if (c.isLoading.value) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
+          
+// Messages
+Expanded(
+  child: Obx(() {
+    if (c.isLoading.value) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
 
-              final list = c.messages;
+    // Hide failed messages; show only successful messages.
+    final list = c.messages
+        .where((message) => !message.failed)
+        .toList();
 
-              if (list.isEmpty) {
-                return Center(
-                  child: Text(
-                    'No messages yet',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                );
-              }
+    if (list.isEmpty) {
+      return Center(
+        child: Text(
+          'No messages yet',
+          style: AppTextStyles.bodySmall,
+        ),
+      );
+    }
 
-              return ListView.builder(
-                controller: _scroll,
-                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                itemCount: list.length,
-                itemBuilder: (context, i) {
-                  final message = list[i];
-                  final previous = i > 0 ? list[i - 1] : null;
+    return ListView.builder(
+      controller: _scroll,
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      itemCount: list.length,
+      itemBuilder: (context, i) {
+        final message = list[i];
+        final previous = i > 0 ? list[i - 1] : null;
 
-                  final newDay = message.createdAt != null &&
-                      (previous?.createdAt == null ||
-                          previous!.createdAt!.toLocal().day !=
-                              message.createdAt!.toLocal().day ||
-                          message.createdAt!
-                                  .difference(previous.createdAt!)
-                                  .inHours >=
-                              24);
+        final newDay = message.createdAt != null &&
+            (previous?.createdAt == null ||
+                previous!.createdAt!.toLocal().day !=
+                    message.createdAt!.toLocal().day ||
+                message.createdAt!
+                        .difference(previous.createdAt!)
+                        .inHours >=
+                    24);
 
-                  return Column(
-                    children: [
-                      if (newDay)
-                        Container(
-                          margin: EdgeInsets.only(bottom: 12.h),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 14.w,
-                            vertical: 4.h,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceSecondary,
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          child: Text(
-                            _dayLabel(message.createdAt!.toLocal()),
-                            style: AppTextStyles.captionMedium,
-                          ),
-                        ),
-                      _MessageBubble(
-                        message: message,
-                        customerName: conv.name,
-                      ),
-                    ],
-                  );
-                },
-              );
-            }),
-          ),
+        return Column(
+          children: [
+            if (newDay)
+              Container(
+                margin: EdgeInsets.only(bottom: 12.h),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 14.w,
+                  vertical: 4.h,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSecondary,
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: Text(
+                  _dayLabel(message.createdAt!.toLocal()),
+                  style: AppTextStyles.captionMedium,
+                ),
+              ),
+            _MessageBubble(
+              message: message,
+              customerName: conv.name,
+            ),
+          ],
+        );
+      },
+    );
+  }),
+),
 
           // Message input
           SafeArea(
@@ -431,20 +435,14 @@ class _MessageBubble extends StatelessWidget {
                   fontSize: 11.sp,
                 ),
               ),
-              if (!fromCustomer) ...[
-                SizedBox(width: 4.w),
-                message.failed
-                    ? Icon(
-                        Icons.error_outline_rounded,
-                        size: 14.sp,
-                        color: AppColors.error,
-                      )
-                    : Icon(
-                        Icons.done_all_rounded,
-                        size: 14.sp,
-                        color: AppColors.primary,
-                      ),
-              ],
+            if (!fromCustomer && !message.failed) ...[
+  SizedBox(width: 4.w),
+  Icon(
+    Icons.done_all_rounded,
+    size: 14.sp,
+    color: AppColors.primary,
+  ),
+],
             ],
           ),
         ],

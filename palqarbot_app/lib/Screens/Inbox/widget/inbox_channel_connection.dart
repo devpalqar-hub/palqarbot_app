@@ -15,8 +15,11 @@ class InboxChannelConnection {
   static const Color _secondary = Color(0xFF7B8BA7);
   static const Color _border = Color(0xFFE3EAF4);
   static const Color _blue = Color(0xFF1685F8);
+  static const Color _green = Color(0xFF0BAA78);
+  static const Color _red = Color(0xFFDC2626);
 
   static bool _isShowingWhatsappOptions = false;
+  static bool _isDisconnectingWhatsApp = false;
 
   static ProfileSettingsController get _controller {
     if (Get.isRegistered<ProfileSettingsController>()) {
@@ -26,24 +29,51 @@ class InboxChannelConnection {
     return Get.put(ProfileSettingsController());
   }
 
+  // ---------------------------------------------------------------------------
+  // PROFILE
+  // ---------------------------------------------------------------------------
+
   static Future<bool> _ensureProfile() async {
     final controller = _controller;
 
-    if (controller.profileId.isEmpty || controller.selectedProfile == null) {
+    if (controller.profileId.isEmpty ||
+        controller.selectedProfile == null) {
       await controller.loadSettings();
     }
 
-    if (controller.profileId.isNotEmpty && controller.selectedProfile != null) {
+    if (controller.profileId.isNotEmpty &&
+        controller.selectedProfile != null) {
       return true;
     }
-    AppToast.showToast('Please create or select a business profile first.');
+
+    AppToast.showToast(
+      'Please create or select a business profile first.',
+    );
 
     return false;
   }
 
-  static Future<bool> _showDisconnectConfirmation() async {
-    final result = await Get.dialog<bool>(
-      AlertDialog(
+  static void _showProfileUnavailable() {
+    AppToast.showToast(
+      'Please create or select a business profile first.',
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // DISCONNECT CONFIRMATION
+  // ---------------------------------------------------------------------------
+
+
+static Future<bool> _showDisconnectConfirmation() async {
+  final context = Get.context;
+
+  if (context == null) return false;
+
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return AlertDialog(
         backgroundColor: Colors.white,
         elevation: 0,
         insetPadding: EdgeInsets.symmetric(horizontal: 28.w),
@@ -64,7 +94,7 @@ class InboxChannelConnection {
               ),
               child: Icon(
                 Icons.link_off_rounded,
-                color: const Color(0xFFDC2626),
+                color: _red,
                 size: 28.sp,
               ),
             ),
@@ -84,7 +114,11 @@ class InboxChannelConnection {
           'Are you sure you want to disconnect your WhatsApp account? '
           'Your bot will stop managing conversations through this connection.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _secondary, fontSize: 13.sp, height: 1.6),
+          style: TextStyle(
+            color: _secondary,
+            fontSize: 13.sp,
+            height: 1.6,
+          ),
         ),
         actions: [
           Row(
@@ -93,10 +127,12 @@ class InboxChannelConnection {
                 child: SizedBox(
                   height: 44.h,
                   child: OutlinedButton(
-                    onPressed: () => Get.back<bool>(result: false),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop(false);
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _heading,
-                      side: const BorderSide(color: Color(0xFFE3EAF4)),
+                      side: const BorderSide(color: _border),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12.r),
                       ),
@@ -116,8 +152,13 @@ class InboxChannelConnection {
                 child: SizedBox(
                   height: 44.h,
                   child: ElevatedButton.icon(
-                    onPressed: () => Get.back<bool>(result: true),
-                    icon: Icon(Icons.link_off_rounded, size: 17.sp),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop(true);
+                    },
+                    icon: Icon(
+                      Icons.link_off_rounded,
+                      size: 17.sp,
+                    ),
                     label: Text(
                       'Disconnect',
                       style: TextStyle(
@@ -126,7 +167,7 @@ class InboxChannelConnection {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC2626),
+                      backgroundColor: _red,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: EdgeInsets.symmetric(horizontal: 8.w),
@@ -140,12 +181,12 @@ class InboxChannelConnection {
             ],
           ),
         ],
-      ),
-      barrierDismissible: true,
-    );
+      );
+    },
+  );
 
-    return result == true;
-  }
+  return result == true;
+}
 
   static Future<void> connectWhatsApp() async {
     if (_isShowingWhatsappOptions) return;
@@ -159,33 +200,10 @@ class InboxChannelConnection {
       final controller = _controller;
 
       if (controller.isOpenWaConnected) {
-        final shouldDisconnect = await _showDisconnectConfirmation();
-
-        if (!shouldDisconnect) return;
-
-        final disconnected = await controller.deactivateOpenWa();
-
-        if (!disconnected) {
-          AppToast.showToast(
-            'Unable to disconnect WhatsApp. Please try again.',
-          );
-          return;
-        }
-
-        controller.isOpenWaConnected = false;
-        controller.isOpenWaPolling = false;
-        controller.openWaQrCode = '';
-        controller.openWaConnectedNumber = '';
-        controller.openWaPairingCode = '';
-        controller.update();
-
-        await controller.loadSettings();
-
-        AppToast.showToast('WhatsApp disconnected successfully.');
+        await _disconnectWhatsApp(controller);
         return;
       }
 
-      // If not connected, show the existing connection options.
       final selected = await Get.dialog<String>(
         AlertDialog(
           shape: RoundedRectangleBorder(
@@ -201,7 +219,11 @@ class InboxChannelConnection {
           ),
           content: Text(
             'Choose how you want to connect your WhatsApp account.',
-            style: TextStyle(color: _secondary, height: 1.5, fontSize: 14.sp),
+            style: TextStyle(
+              color: _secondary,
+              height: 1.5,
+              fontSize: 14.sp,
+            ),
           ),
           actions: [
             SizedBox(
@@ -237,8 +259,6 @@ class InboxChannelConnection {
         barrierDismissible: true,
       );
 
-      if (selected == null) return;
-
       switch (selected) {
         case 'cloud':
           await _showWhatsappCloudApiForm();
@@ -246,11 +266,66 @@ class InboxChannelConnection {
         case 'qr':
           await _startWhatsappQrFlow();
           break;
+        default:
+          break;
       }
     } finally {
       _isShowingWhatsappOptions = false;
     }
   }
+
+static Future<void> _disconnectWhatsApp(
+  ProfileSettingsController controller,
+) async {
+  if (_isDisconnectingWhatsApp) return;
+
+  _isDisconnectingWhatsApp = true;
+
+  try {
+    final shouldDisconnect = await _showDisconnectConfirmation();
+
+    if (!shouldDisconnect) return;
+
+    final disconnected = await controller.deactivateOpenWa();
+
+    if (!disconnected) {
+      AppToast.showToast(
+        'Unable to disconnect WhatsApp. Please try again.',
+      );
+      return;
+    }
+
+    _resetWhatsAppState(controller);
+
+    await controller.loadSettings();
+
+    AppToast.showToast('WhatsApp disconnected successfully.',isSuccess: true,);
+  } catch (error, stackTrace) {
+    debugPrint('WHATSAPP DISCONNECT ERROR: $error');
+    debugPrintStack(stackTrace: stackTrace);
+
+    AppToast.showToast(
+      'Unable to disconnect WhatsApp. Please try again.',
+    );
+  } finally {
+    _isDisconnectingWhatsApp = false;
+  }
+}
+
+  static void _resetWhatsAppState(
+    ProfileSettingsController controller,
+  ) {
+    controller.isOpenWaConnected = false;
+    controller.isOpenWaPolling = false;
+    controller.openWaQrCode = '';
+    controller.openWaConnectedNumber = '';
+    controller.openWaPairingCode = '';
+    controller.update();
+  }
+
+  // ---------------------------------------------------------------------------
+  // INSTAGRAM ENTRY POINT
+  // ---------------------------------------------------------------------------
 
   static Future<void> connectInstagram() async {
     if (!await _ensureProfile()) return;
@@ -276,37 +351,6 @@ class InboxChannelConnection {
       return;
     }
 
-    final fields = [
-      const _ConfigField(
-        label: 'Phone Number ID',
-        hint: 'Enter your Meta phone number ID',
-        icon: Icons.phone_android_rounded,
-      ),
-      const _ConfigField(
-        label: 'Business Account ID',
-        hint: 'Enter your WhatsApp Business Account ID',
-        icon: Icons.business_rounded,
-      ),
-      const _ConfigField(
-        label: 'Access Token',
-        hint: 'Paste your permanent access token',
-        icon: Icons.key_rounded,
-        obscure: true,
-      ),
-      const _ConfigField(
-        label: 'App Secret',
-        hint: 'Enter your Meta app secret',
-        icon: Icons.lock_outline_rounded,
-        obscure: true,
-      ),
-      const _ConfigField(
-        label: 'Verify Token',
-        hint: 'Enter your webhook verify token',
-        icon: Icons.verified_user_outlined,
-        obscure: true,
-      ),
-    ];
-
     final saved = await _showChannelConfigDialog(
       title: 'WhatsApp Cloud API',
       subtitle:
@@ -315,7 +359,36 @@ class InboxChannelConnection {
       icon: Icons.chat_rounded,
       iconColor: const Color(0xFF168C58),
       iconBackground: const Color(0xFFE7F7EE),
-      fields: fields,
+      fields: const [
+        _ConfigField(
+          label: 'Phone Number ID',
+          hint: 'Enter your Meta phone number ID',
+          icon: Icons.phone_android_rounded,
+        ),
+        _ConfigField(
+          label: 'Business Account ID',
+          hint: 'Enter your WhatsApp Business Account ID',
+          icon: Icons.business_rounded,
+        ),
+        _ConfigField(
+          label: 'Access Token',
+          hint: 'Paste your permanent access token',
+          icon: Icons.key_rounded,
+          obscure: true,
+        ),
+        _ConfigField(
+          label: 'App Secret',
+          hint: 'Enter your Meta app secret',
+          icon: Icons.lock_outline_rounded,
+          obscure: true,
+        ),
+        _ConfigField(
+          label: 'Verify Token',
+          hint: 'Enter your webhook verify token',
+          icon: Icons.verified_user_outlined,
+          obscure: true,
+        ),
+      ],
       onSave: (values, enabled) {
         return controller.saveWhatsappConfig(
           profileId: profileId,
@@ -357,32 +430,6 @@ class InboxChannelConnection {
       return;
     }
 
-    final fields = [
-      const _ConfigField(
-        label: 'Instagram Account ID',
-        hint: 'Enter your Instagram Business Account ID',
-        icon: Icons.camera_alt_outlined,
-      ),
-      const _ConfigField(
-        label: 'Access Token',
-        hint: 'Paste your Instagram access token',
-        icon: Icons.key_rounded,
-        obscure: true,
-      ),
-      const _ConfigField(
-        label: 'App Secret',
-        hint: 'Enter your Meta app secret',
-        icon: Icons.lock_outline_rounded,
-        obscure: true,
-      ),
-      const _ConfigField(
-        label: 'Verify Token',
-        hint: 'Enter your webhook verify token',
-        icon: Icons.verified_user_outlined,
-        obscure: true,
-      ),
-    ];
-
     final saved = await _showChannelConfigDialog(
       title: 'Instagram Business',
       subtitle:
@@ -391,7 +438,31 @@ class InboxChannelConnection {
       icon: Icons.camera_alt_rounded,
       iconColor: const Color(0xFFC13584),
       iconBackground: const Color(0xFFFFE8F1),
-      fields: fields,
+      fields: const [
+        _ConfigField(
+          label: 'Instagram Account ID',
+          hint: 'Enter your Instagram Business Account ID',
+          icon: Icons.camera_alt_outlined,
+        ),
+        _ConfigField(
+          label: 'Access Token',
+          hint: 'Paste your Instagram access token',
+          icon: Icons.key_rounded,
+          obscure: true,
+        ),
+        _ConfigField(
+          label: 'App Secret',
+          hint: 'Enter your Meta app secret',
+          icon: Icons.lock_outline_rounded,
+          obscure: true,
+        ),
+        _ConfigField(
+          label: 'Verify Token',
+          hint: 'Enter your webhook verify token',
+          icon: Icons.verified_user_outlined,
+          obscure: true,
+        ),
+      ],
       onSave: (values, enabled) {
         return controller.saveInstagramConfig(
           profileId: profileId,
@@ -415,7 +486,7 @@ class InboxChannelConnection {
   }
 
   // ---------------------------------------------------------------------------
-  // SHARED CONFIGURATION DIALOG
+  // SHARED CONFIGURATION BOTTOM SHEET
   // ---------------------------------------------------------------------------
 
   static Future<bool?> _showChannelConfigDialog({
@@ -426,7 +497,10 @@ class InboxChannelConnection {
     required Color iconColor,
     required Color iconBackground,
     required List<_ConfigField> fields,
-    required Future<bool> Function(List<String> values, bool enabled) onSave,
+    required Future<bool> Function(
+      List<String> values,
+      bool enabled,
+    ) onSave,
   }) async {
     final textControllers = List.generate(
       fields.length,
@@ -446,17 +520,20 @@ class InboxChannelConnection {
 
             return Container(
               width: double.infinity,
-              constraints: BoxConstraints(maxHeight: screenHeight * 0.80),
+              constraints: BoxConstraints(
+                maxHeight: screenHeight * 0.80,
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(24.r),
+                ),
               ),
               child: SafeArea(
                 top: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Handle
                     SizedBox(height: 8.h),
                     Container(
                       width: 32.w,
@@ -466,10 +543,13 @@ class InboxChannelConnection {
                         borderRadius: BorderRadius.circular(10.r),
                       ),
                     ),
-
-                    // Compact header
                     Padding(
-                      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 12.h),
+                      padding: EdgeInsets.fromLTRB(
+                        20.w,
+                        12.h,
+                        20.w,
+                        12.h,
+                      ),
                       child: Row(
                         children: [
                           Container(
@@ -479,7 +559,11 @@ class InboxChannelConnection {
                               color: iconBackground,
                               borderRadius: BorderRadius.circular(10.r),
                             ),
-                            child: Icon(icon, color: iconColor, size: 20.sp),
+                            child: Icon(
+                              icon,
+                              color: iconColor,
+                              size: 20.sp,
+                            ),
                           ),
                           SizedBox(width: 10.w),
                           Expanded(
@@ -520,16 +604,16 @@ class InboxChannelConnection {
                             onPressed: submitting
                                 ? null
                                 : () => Get.back<bool>(result: false),
-                            icon: Icon(Icons.close_rounded, size: 19.sp),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 19.sp,
+                            ),
                             color: _secondary,
                           ),
                         ],
                       ),
                     ),
-
                     const Divider(height: 1, color: _border),
-
-                    // Scrollable form
                     Flexible(
                       child: SingleChildScrollView(
                         keyboardDismissBehavior:
@@ -564,7 +648,6 @@ class InboxChannelConnection {
                               ],
                             ),
                             SizedBox(height: 12.h),
-
                             for (int i = 0; i < fields.length; i++) ...[
                               Text(
                                 fields[i].label,
@@ -577,8 +660,7 @@ class InboxChannelConnection {
                               SizedBox(height: 5.h),
                               TextField(
                                 controller: textControllers[i],
-                                obscureText:
-                                    fields[i].obscure &&
+                                obscureText: fields[i].obscure &&
                                     !visibleFields.contains(i),
                                 autocorrect: false,
                                 enableSuggestions: !fields[i].obscure,
@@ -603,7 +685,8 @@ class InboxChannelConnection {
                                   ),
                                   suffixIcon: fields[i].obscure
                                       ? IconButton(
-                                          visualDensity: VisualDensity.compact,
+                                          visualDensity:
+                                              VisualDensity.compact,
                                           constraints: BoxConstraints(
                                             minWidth: 34.w,
                                             minHeight: 34.h,
@@ -611,8 +694,10 @@ class InboxChannelConnection {
                                           padding: EdgeInsets.zero,
                                           onPressed: () {
                                             setSheetState(() {
-                                              if (!visibleFields.add(i)) {
+                                              if (visibleFields.contains(i)) {
                                                 visibleFields.remove(i);
+                                              } else {
+                                                visibleFields.add(i);
                                               }
                                             });
                                           },
@@ -656,10 +741,7 @@ class InboxChannelConnection {
                               if (i != fields.length - 1)
                                 SizedBox(height: 10.h),
                             ],
-
                             SizedBox(height: 14.h),
-
-                            // Enable channel
                             Container(
                               padding: EdgeInsets.symmetric(
                                 horizontal: 10.w,
@@ -732,9 +814,7 @@ class InboxChannelConnection {
                                 ],
                               ),
                             ),
-
                             SizedBox(height: 10.h),
-
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -760,12 +840,14 @@ class InboxChannelConnection {
                         ),
                       ),
                     ),
-
                     const Divider(height: 1, color: _border),
-
-                    // Footer
                     Padding(
-                      padding: EdgeInsets.fromLTRB(16.w, 9.h, 16.w, 10.h),
+                      padding: EdgeInsets.fromLTRB(
+                        16.w,
+                        9.h,
+                        16.w,
+                        10.h,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
@@ -800,10 +882,12 @@ class InboxChannelConnection {
                                     ? null
                                     : () async {
                                         final values = textControllers
-                                            .map((c) => c.text.trim())
+                                            .map((item) => item.text.trim())
                                             .toList();
 
-                                        if (values.any((v) => v.isEmpty)) {
+                                        if (values.any(
+                                          (value) => value.isEmpty,
+                                        )) {
                                           AppToast.showToast(
                                             'Please complete all credential fields.',
                                           );
@@ -838,6 +922,7 @@ class InboxChannelConnection {
                                           setSheetState(() {
                                             submitting = false;
                                           });
+
                                           AppToast.showToast(
                                             'Unable to save the configuration. '
                                             'Check your credentials and try again.',
@@ -908,22 +993,14 @@ class InboxChannelConnection {
   }
 
   // ---------------------------------------------------------------------------
-  // WHATSAPP QR CONNECTION
+  // LOADING DIALOG
   // ---------------------------------------------------------------------------
-  static Future<void> _startWhatsappQrFlow() async {
-    final controller = _controller;
 
-    if (controller.profileId.isEmpty) {
-      await controller.loadSettings();
-    }
-
-    if (controller.profileId.isEmpty) {
-      _showProfileUnavailable();
-      return;
-    }
-
-    // Show loading dialog while connecting.
-    Get.dialog<void>(
+  static Future<void> _showLoadingDialog({
+    required String title,
+    required String message,
+  }) async {
+    await Get.dialog<void>(
       PopScope(
         canPop: false,
         child: Dialog(
@@ -931,7 +1008,10 @@ class InboxChannelConnection {
             borderRadius: BorderRadius.circular(20.r),
           ),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 28.h),
+            padding: EdgeInsets.symmetric(
+              horizontal: 24.w,
+              vertical: 28.h,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -945,7 +1025,7 @@ class InboxChannelConnection {
                 ),
                 SizedBox(height: 20.h),
                 Text(
-                  'Preparing WhatsApp connection',
+                  title,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _heading,
@@ -955,7 +1035,7 @@ class InboxChannelConnection {
                 ),
                 SizedBox(height: 8.h),
                 Text(
-                  'Please wait while we connect to WhatsApp and generate your QR code.',
+                  message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _secondary,
@@ -970,6 +1050,33 @@ class InboxChannelConnection {
       ),
       barrierDismissible: false,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // WHATSAPP QR CONNECTION
+  // ---------------------------------------------------------------------------
+
+  static Future<void> _startWhatsappQrFlow() async {
+    final controller = _controller;
+
+    if (controller.profileId.isEmpty) {
+      await controller.loadSettings();
+    }
+
+    if (controller.profileId.isEmpty) {
+      _showProfileUnavailable();
+      return;
+    }
+
+    // Show loading while generating the QR code.
+    final loadingDialog = _showLoadingDialog(
+      title: 'Preparing WhatsApp connection',
+      message:
+          'Please wait while we connect to WhatsApp and generate your QR code.',
+    );
+
+    // Allow the loading dialog to render before starting the request.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
 
     bool success = false;
 
@@ -987,11 +1094,13 @@ class InboxChannelConnection {
       if (Get.isDialogOpen == true) {
         Get.back<void>();
       }
+
+      await loadingDialog;
     }
 
     if (!success) return;
 
-    // Keep a reference to the exact QR dialog route.
+    // Capture the actual QR dialog route so disconnect closes this dialog.
     Route<dynamic>? qrDialogRoute;
     NavigatorState? qrDialogNavigator;
 
@@ -1008,9 +1117,24 @@ class InboxChannelConnection {
                   horizontal: 24.w,
                   vertical: 20.h,
                 ),
-                titlePadding: EdgeInsets.fromLTRB(18.w, 14.h, 12.w, 6.h),
-                contentPadding: EdgeInsets.fromLTRB(18.w, 6.h, 18.w, 4.h),
-                actionsPadding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 10.h),
+                titlePadding: EdgeInsets.fromLTRB(
+                  18.w,
+                  14.h,
+                  12.w,
+                  6.h,
+                ),
+                contentPadding: EdgeInsets.fromLTRB(
+                  18.w,
+                  6.h,
+                  18.w,
+                  4.h,
+                ),
+                actionsPadding: EdgeInsets.fromLTRB(
+                  12.w,
+                  0,
+                  12.w,
+                  10.h,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18.r),
                   side: const BorderSide(color: _border),
@@ -1049,7 +1173,10 @@ class InboxChannelConnection {
                       ),
                       padding: EdgeInsets.zero,
                       onPressed: () => Get.back<String>(),
-                      icon: Icon(Icons.close_rounded, size: 19.sp),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 19.sp,
+                      ),
                     ),
                   ],
                 ),
@@ -1062,7 +1189,7 @@ class InboxChannelConnection {
                         if (c.isOpenWaConnected) ...[
                           Icon(
                             Icons.check_circle_rounded,
-                            color: const Color(0xFF0BAA78),
+                            color: _green,
                             size: 54.sp,
                           ),
                           SizedBox(height: 12.h),
@@ -1135,7 +1262,8 @@ class InboxChannelConnection {
                                 horizontal: 8.w,
                                 vertical: 4.h,
                               ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
                             ),
                           ),
                           SizedBox(height: 6.h),
@@ -1171,9 +1299,10 @@ class InboxChannelConnection {
                                 final shouldDisconnect =
                                     await _showDisconnectConfirmation();
 
-                                if (shouldDisconnect != true) return;
+                                if (!shouldDisconnect) return;
 
-                                final disconnected = await c.deactivateOpenWa();
+                                final disconnected =
+                                    await c.deactivateOpenWa();
 
                                 if (!disconnected) {
                                   AppToast.showToast(
@@ -1183,16 +1312,10 @@ class InboxChannelConnection {
                                   return;
                                 }
 
-                                // Reset the WhatsApp connection state.
-                                c.isOpenWaConnected = false;
-                                c.isOpenWaPolling = false;
-                                c.openWaQrCode = '';
-                                c.openWaConnectedNumber = '';
-                                c.openWaPairingCode = '';
-                                c.update();
+                                _resetWhatsAppState(c);
 
-                                // Remove the exact QR dialog route rather
-                                // than popping whichever route is on top.
+                                // Close this exact QR dialog, not the route
+                                // that happens to be on top of the navigator.
                                 final route = qrDialogRoute;
                                 final navigator = qrDialogNavigator;
 
@@ -1204,12 +1327,13 @@ class InboxChannelConnection {
 
                                 AppToast.showToast(
                                   'WhatsApp disconnected successfully.',
+                                  isSuccess: true,
                                 );
 
                                 await c.loadSettings();
                               },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
+                          backgroundColor: _red,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -1224,10 +1348,14 @@ class InboxChannelConnection {
                     )
                   else ...[
                     TextButton(
-                      onPressed: c.isOpenWaActivating || c.isOpenWaPolling
+                      onPressed: c.isOpenWaActivating ||
+                              c.isOpenWaPolling
                           ? null
                           : () => c.fetchOpenWaStatus(),
-                      child: Text('Refresh', style: TextStyle(fontSize: 12.sp)),
+                      child: Text(
+                        'Refresh',
+                        style: TextStyle(fontSize: 12.sp),
+                      ),
                     ),
                     Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1236,7 +1364,8 @@ class InboxChannelConnection {
                         SizedBox(
                           height: 36.h,
                           child: ElevatedButton(
-                            onPressed: c.isOpenWaActivating || c.isOpenWaPolling
+                            onPressed: c.isOpenWaActivating ||
+                                    c.isOpenWaPolling
                                 ? null
                                 : () async {
                                     await c.activateOpenWa();
@@ -1253,8 +1382,9 @@ class InboxChannelConnection {
                                 ? SizedBox(
                                     width: 15.w,
                                     height: 15.h,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.w,
+                                    child:
+                                        const CircularProgressIndicator(
+                                      strokeWidth: 2,
                                       color: Colors.white,
                                     ),
                                   )
@@ -1268,7 +1398,10 @@ class InboxChannelConnection {
                         Text(
                           'Note: Scan the QR code first, then tap Activate.',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: Colors.red, fontSize: 10.sp),
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 10.sp,
+                          ),
                         ),
                       ],
                     ),
@@ -1289,6 +1422,7 @@ class InboxChannelConnection {
 
     await controller.loadSettings();
   }
+
   // ---------------------------------------------------------------------------
   // WHATSAPP PHONE-NUMBER CONNECTION
   // ---------------------------------------------------------------------------
@@ -1305,7 +1439,6 @@ class InboxChannelConnection {
       return;
     }
 
-    // Step 1: Ask for the WhatsApp phone number.
     final phoneNumber = await Get.dialog<String>(
       const _WhatsappPhoneNumberDialog(),
       barrierDismissible: false,
@@ -1313,60 +1446,17 @@ class InboxChannelConnection {
 
     if (phoneNumber == null || phoneNumber.isEmpty) return;
 
-    // Step 2: Show loading while requesting the pairing code.
-    Get.dialog<void>(
-      PopScope(
-        canPop: false,
-        child: Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.r),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 28.h),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 42.w,
-                  height: 42.h,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3.w,
-                    color: _blue,
-                  ),
-                ),
-                SizedBox(height: 20.h),
-                Text(
-                  'Generating pairing code',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _heading,
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(height: 8.h),
-                Text(
-                  'Connecting to WhatsApp. Please wait while we generate your pairing code.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _secondary,
-                    fontSize: 12.sp,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      barrierDismissible: false,
+    final loadingDialog = _showLoadingDialog(
+      title: 'Generating pairing code',
+      message:
+          'Connecting to WhatsApp. Please wait while we generate your pairing code.',
     );
+
+    await Future<void>.delayed(const Duration(milliseconds: 100));
 
     bool success = false;
 
     try {
-      // Keep the loading indicator visible for at least 2 seconds.
-      // If the API takes longer, continue showing loading until it finishes.
       final results = await Future.wait<bool>([
         controller.connectOpenWaWithPhone(phoneNumber),
         Future.delayed(const Duration(seconds: 2), () => true),
@@ -1377,13 +1467,13 @@ class InboxChannelConnection {
       debugPrint('WHATSAPP PHONE CONNECTION ERROR: $error');
       debugPrintStack(stackTrace: stackTrace);
     } finally {
-      // Close the loading dialog after the request completes.
       if (Get.isDialogOpen == true) {
         Get.back<void>();
       }
+
+      await loadingDialog;
     }
 
-    // Step 3: Show an error if the pairing code request failed.
     if (!success) {
       AppToast.showToast(
         'Unable to generate the pairing code. Please try again.',
@@ -1391,18 +1481,17 @@ class InboxChannelConnection {
       return;
     }
 
-    // Step 4: Show the pairing code dialog.
     await _showWhatsappPhonePairingDialog(controller);
-
-    // Step 5: Refresh connection settings.
     await controller.loadSettings();
   }
 
   static Future<void> _showWhatsappPhonePairingDialog(
     ProfileSettingsController controller,
   ) async {
+    // Capture the exact pairing-dialog route.
     Route<dynamic>? pairingDialogRoute;
     NavigatorState? pairingDialogNavigator;
+
     await Get.dialog<void>(
       Builder(
         builder: (dialogContext) {
@@ -1436,7 +1525,10 @@ class InboxChannelConnection {
                     IconButton(
                       tooltip: 'Close',
                       onPressed: () => Get.back<void>(),
-                      icon: Icon(Icons.close_rounded, size: 22.sp),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 22.sp,
+                      ),
                     ),
                   ],
                 ),
@@ -1465,7 +1557,9 @@ class InboxChannelConnection {
                           decoration: BoxDecoration(
                             color: const Color(0xFFE7F2FF),
                             borderRadius: BorderRadius.circular(16.r),
-                            border: Border.all(color: const Color(0xFFC9E1FF)),
+                            border: Border.all(
+                              color: const Color(0xFFC9E1FF),
+                            ),
                           ),
                           child: Column(
                             children: [
@@ -1503,10 +1597,11 @@ class InboxChannelConnection {
                             c.openWaConnectedNumber.isNotEmpty) ...[
                           SizedBox(height: 12.h),
                           Text(
-                            'Connected number: ${c.openWaConnectedNumber}',
+                            'Connected number: '
+                            '${c.openWaConnectedNumber}',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: const Color(0xFF0BAA78),
+                              color: _green,
                               fontWeight: FontWeight.w600,
                               fontSize: 14.sp,
                             ),
@@ -1538,26 +1633,22 @@ class InboxChannelConnection {
                               final shouldDisconnect =
                                   await _showDisconnectConfirmation();
 
-                              // The confirmation dialog has already closed.
                               if (!shouldDisconnect) return;
 
-                              final disconnected = await c.deactivateOpenWa();
+                              final disconnected =
+                                  await c.deactivateOpenWa();
 
                               if (!disconnected) {
                                 AppToast.showToast(
-                                  'Unable to disconnect WhatsApp. Please try again.',
+                                  'Unable to disconnect WhatsApp. '
+                                  'Please try again.',
                                 );
                                 return;
                               }
 
-                              c.isOpenWaConnected = false;
-                              c.isOpenWaPolling = false;
-                              c.openWaQrCode = '';
-                              c.openWaConnectedNumber = '';
-                              c.openWaPairingCode = '';
-                              c.update();
+                              _resetWhatsAppState(c);
 
-                              // Close only the phone-pairing dialog.
+                              // Remove only the pairing dialog route.
                               final route = pairingDialogRoute;
                               final navigator = pairingDialogNavigator;
 
@@ -1569,24 +1660,28 @@ class InboxChannelConnection {
 
                               AppToast.showToast(
                                 'WhatsApp disconnected successfully.',
+                                isSuccess: true,
                               );
 
                               await c.loadSettings();
                             },
-
-                      icon: Icon(Icons.link_off_rounded, size: 18.sp),
+                      icon: Icon(
+                        Icons.link_off_rounded,
+                        size: 18.sp,
+                      ),
                       label: Text(
                         'Disconnect',
                         style: TextStyle(fontSize: 14.sp),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                        backgroundColor: _red,
                         foregroundColor: Colors.white,
                       ),
                     )
                   else ...[
                     TextButton(
-                      onPressed: c.isOpenWaPolling || c.isOpenWaActivating
+                      onPressed: c.isOpenWaPolling ||
+                              c.isOpenWaActivating
                           ? null
                           : () => c.fetchOpenWaStatus(),
                       child: Text(
@@ -1599,10 +1694,12 @@ class InboxChannelConnection {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         ElevatedButton(
-                          onPressed: c.isOpenWaActivating || c.isOpenWaPolling
+                          onPressed: c.isOpenWaActivating ||
+                                  c.isOpenWaPolling
                               ? null
                               : () async {
-                                  final activated = await c.activateOpenWa();
+                                  final activated =
+                                      await c.activateOpenWa();
 
                                   if (activated) {
                                     Get.back<void>();
@@ -1616,8 +1713,9 @@ class InboxChannelConnection {
                               ? SizedBox(
                                   width: 18.w,
                                   height: 18.h,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.w,
+                                  child:
+                                      const CircularProgressIndicator(
+                                    strokeWidth: 2,
                                     color: Colors.white,
                                   ),
                                 )
@@ -1630,7 +1728,10 @@ class InboxChannelConnection {
                         Text(
                           'Enter the pairing code in WhatsApp, then tap Activate.',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: Colors.red, fontSize: 10.sp),
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 10.sp,
+                          ),
                         ),
                       ],
                     ),
@@ -1655,12 +1756,19 @@ class InboxChannelConnection {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.qr_code_2_rounded, size: 64.sp, color: _secondary),
+            Icon(
+              Icons.qr_code_2_rounded,
+              size: 64.sp,
+              color: _secondary,
+            ),
             SizedBox(height: 8.h),
             Text(
               'QR code unavailable',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _secondary, fontSize: 12.sp),
+              style: TextStyle(
+                color: _secondary,
+                fontSize: 12.sp,
+              ),
             ),
           ],
         ),
@@ -1669,7 +1777,8 @@ class InboxChannelConnection {
 
     final value = qrCode.trim();
 
-    if (value.startsWith('http://') || value.startsWith('https://')) {
+    if (value.startsWith('http://') ||
+        value.startsWith('https://')) {
       return Image.network(
         value,
         fit: BoxFit.contain,
@@ -1695,17 +1804,17 @@ class InboxChannelConnection {
   // ---------------------------------------------------------------------------
   // HELPERS
   // ---------------------------------------------------------------------------
-  static void _showProfileUnavailable() {
-    AppToast.showToast('Please create or select a business profile first.');
-  }
 
-  static void _showSuccess(String title, String message) {
-    AppToast.showToast('$title: $message');
-  }
+ static void _showSuccess(String title, String message) {
+  AppToast.showToast(
+    '$title: $message',
+    isSuccess: true,
+  );
+}
 }
 
 // =============================================================================
-// SUPPORTING WIDGETS
+// CONFIGURATION FIELD MODEL
 // =============================================================================
 
 class _ConfigField {
@@ -1722,13 +1831,20 @@ class _ConfigField {
   });
 }
 
+// =============================================================================
+// REQUIRED BADGE
+// =============================================================================
+
 class _RequiredBadge extends StatelessWidget {
   const _RequiredBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 9.w, vertical: 5.h),
+      padding: EdgeInsets.symmetric(
+        horizontal: 9.w,
+        vertical: 5.h,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(20.r),
@@ -1756,6 +1872,10 @@ class _RequiredBadge extends StatelessWidget {
   }
 }
 
+// =============================================================================
+// CONNECTION STATUS
+// =============================================================================
+
 class _ConnectionStatus extends StatelessWidget {
   final bool connected;
   final bool polling;
@@ -1773,13 +1893,17 @@ class _ConnectionStatus extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(12.r),
       decoration: BoxDecoration(
-        color: connected ? const Color(0xFFE0FAEF) : const Color(0xFFE7F2FF),
+        color: connected
+            ? const Color(0xFFE0FAEF)
+            : const Color(0xFFE7F2FF),
         borderRadius: BorderRadius.circular(12.r),
       ),
       child: Row(
         children: [
           Icon(
-            connected ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+            connected
+                ? Icons.check_circle_rounded
+                : Icons.info_outline_rounded,
             color: connected
                 ? const Color(0xFF0BAA78)
                 : InboxChannelConnection._blue,
@@ -1800,13 +1924,19 @@ class _ConnectionStatus extends StatelessWidget {
             SizedBox(
               width: 16.w,
               height: 16.h,
-              child: CircularProgressIndicator(strokeWidth: 2.w),
+              child: const CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
             ),
         ],
       ),
     );
   }
 }
+
+// =============================================================================
+// QR ERROR WIDGET
+// =============================================================================
 
 class _QrError extends StatelessWidget {
   const _QrError();
@@ -1869,14 +1999,18 @@ class _WhatsappPhoneNumberDialogState
     final phoneNumber = _phoneController.text.trim();
 
     if (phoneNumber.isEmpty) {
-      AppToast.showToast('Enter your WhatsApp phone number with country code.');
+      AppToast.showToast(
+        'Enter your WhatsApp phone number with country code.',
+      );
       return;
     }
 
     final digits = phoneNumber.replaceAll(RegExp(r'\D'), '');
 
     if (digits.length < 8 || digits.length > 15) {
-      AppToast.showToast('Enter a valid number including the country code.');
+      AppToast.showToast(
+        'Enter a valid number including the country code.',
+      );
       return;
     }
 
@@ -1886,13 +2020,18 @@ class _WhatsappPhoneNumberDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      insetPadding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 20.h),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: 24.w,
+        vertical: 20.h,
+      ),
       titlePadding: EdgeInsets.fromLTRB(18.w, 16.h, 18.w, 8.h),
       contentPadding: EdgeInsets.fromLTRB(18.w, 4.h, 18.w, 8.h),
       actionsPadding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.r),
-        side: const BorderSide(color: InboxChannelConnection._border),
+        side: const BorderSide(
+          color: InboxChannelConnection._border,
+        ),
       ),
       title: Row(
         children: [
@@ -1996,7 +2135,10 @@ class _WhatsappPhoneNumberDialogState
       actions: [
         TextButton(
           onPressed: () => Get.back<String>(),
-          child: Text('Cancel', style: TextStyle(fontSize: 12.sp)),
+          child: Text(
+            'Cancel',
+            style: TextStyle(fontSize: 12.sp),
+          ),
         ),
         SizedBox(
           height: 36.h,
@@ -2010,7 +2152,10 @@ class _WhatsappPhoneNumberDialogState
                 borderRadius: BorderRadius.circular(9.r),
               ),
             ),
-            child: Text('Continue', style: TextStyle(fontSize: 12.sp)),
+            child: Text(
+              'Continue',
+              style: TextStyle(fontSize: 12.sp),
+            ),
           ),
         ),
       ],

@@ -7,8 +7,8 @@ import 'package:palqarbot_app/Core/Theme/app_colors.dart';
 import 'package:palqarbot_app/Core/Theme/app_textstyles.dart';
 import 'package:palqarbot_app/Screens/Onboarding/Views/buisness_descriptionscreen.dart';
 
-class OnboardingWelcomeScreen extends StatelessWidget {
-  const OnboardingWelcomeScreen({super.key});
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
 
   void _continue() {
     Get.to(() => const BusinessDescriptionScreen());

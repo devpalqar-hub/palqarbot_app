@@ -10,6 +10,7 @@ import 'package:palqarbot_app/Screens/Auth/Service/auth_controller.dart';
 import 'package:palqarbot_app/Screens/Auth/login_screen.dart';
 
 import 'package:palqarbot_app/Screens/Inbox/inboxscreen.dart';
+import 'package:palqarbot_app/Screens/Onboarding/Views/first_onbaordingscreen.dart';
 import 'package:palqarbot_app/Screens/Settings/SettingsScreen.dart';
 import 'package:palqarbot_app/Screens/bot/BotScreen.dart';
 import 'package:palqarbot_app/Screens/leads/LeadsScreen.dart';
@@ -56,7 +57,7 @@ class PalqarbotApp extends StatelessWidget {
   }
 }
 
-// AUTH GATE + SPLASH SCREEN
+
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -71,7 +72,6 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-
     _authenticationFuture =
         Get.find<AuthController>().isLoggedIn();
   }
@@ -82,7 +82,11 @@ class _AuthGateState extends State<AuthGate> {
       future: _authenticationFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SplashScreen();
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
         if (snapshot.hasError) {
@@ -103,107 +107,6 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-// SPLASH SCREEN
-
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SizedBox.expand(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Robot illustration
-              Container(
-                width: 190.w,
-                height: 190.w,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(40.r),
-                  border: Border.all(
-                    color: AppColors.border,
-                    width: 1,
-                  ),
-                ),
-                padding: EdgeInsets.all(15.w),
-                child: Image.asset(
-                  'assets/robo.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.smart_toy_rounded,
-                      size: 100.sp,
-                      color: AppColors.primary,
-                    );
-                  },
-                ),
-              ),
-
-              SizedBox(height: 28.h),
-
-              // App name
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Palqar',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 34.sp,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.sp,
-                      ),
-                    ),
-                    TextSpan(
-                      text: 'bot',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 34.sp,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.sp,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: 10.h),
-
-              // Tagline
-              Text(
-                'Your AI Assistant for Business',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-
-              SizedBox(height: 38.h),
-
-              // Loading indicator
-              SizedBox(
-                width: 28.w,
-                height: 28.w,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// BOTTOM NAVIGATION
 
 class Bottombar extends StatefulWidget {
   const Bottombar({super.key});
@@ -224,7 +127,7 @@ class _BottombarState extends State<Bottombar> {
     _screens = [
       const InboxScreen(),
       const LeadsScreen(),
-      const BotScreen(),
+     // const BotScreen(),
       const SettingsScreen(),
     ];
   }
@@ -304,11 +207,11 @@ class _BottombarState extends State<Bottombar> {
               selectedIcon: Icon(Icons.people_rounded),
               label: 'Leads',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.auto_awesome_outlined),
-              selectedIcon: Icon(Icons.auto_awesome_rounded),
-              label: 'Bot',
-            ),
+            // NavigationDestination(
+            //   icon: Icon(Icons.auto_awesome_outlined),
+            //   selectedIcon: Icon(Icons.auto_awesome_rounded),
+            //   label: 'Bot',
+            // ),
             NavigationDestination(
               icon: Icon(Icons.settings_outlined),
               selectedIcon: Icon(Icons.settings_rounded),
