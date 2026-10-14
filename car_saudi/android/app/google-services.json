@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "756714437507",
+    "project_id": "villas-qatar-9940c",
+    "storage_bucket": "villas-qatar-9940c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756714437507:android:6136b4a000027ba60f54b6",
+        "android_client_info": {
+          "package_name": "com.villasqatar.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "756714437507-rofeikcbstg083pvm7pj8cruohhsudi6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9nKCEykUWYjCvZ-E5NOqrvCmjB0kRKyw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "756714437507-rofeikcbstg083pvm7pj8cruohhsudi6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "756714437507-5t2fplkcmvur3g2ibf2opsme25a9o9cp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.villasqatar.app",
+                "app_store_id": "6793047851"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
